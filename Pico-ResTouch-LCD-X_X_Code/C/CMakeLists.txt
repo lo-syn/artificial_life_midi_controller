@@ -38,11 +38,16 @@ include_directories(./lib/sdcard)
 # Generate executable file
 add_executable(main 
 main.c
+usb_descriptors.c
 )
 
 # enable usb output, disable uart output
 pico_enable_stdio_usb(main 1)
 pico_enable_stdio_uart(main 0)
+target_compile_definitions(main PRIVATE
+    CFG_TUD_MIDI=1
+    PICO_STDIO_USB_USE_DEFAULT_DESCRIPTORS=0
+)
 
 # create map/bin/hex/uf2 file etc.
 pico_add_extra_outputs(main)

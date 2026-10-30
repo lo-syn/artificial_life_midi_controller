@@ -33,6 +33,7 @@
 #include "LCD_Touch.h"
 #include "DEV_Config.h"
 #include "pico/stdlib.h"
+#include "tusb.h"
 #include <string.h>
 
 extern LCD_DIS sLCD_DIS;
@@ -42,16 +43,32 @@ extern LCD_DIS sLCD_DIS;
 #define BUTTON_COUNT (BUTTON_ROWS * BUTTON_COLUMNS)
 #define BUTTON_GAP 6
 #define BUTTON_MARGIN 8
+#define MIDI_CC_CHANNEL 0
+#define MIDI_CC_NUMBER 48
+#define MIDI_CC_SELECTED_VALUE 127
+
+static void send_control_change(uint8_t value)
+{
+	if (tud_mounted()) {
+		uint8_t message[] = {
+			(uint8_t)(0xB0 | MIDI_CC_CHANNEL),
+			MIDI_CC_NUMBER,
+			value
+		};
+		tud_midi_stream_write(0, message, sizeof(message));
+	}
+}
 
 static void draw_button(POINT x, POINT y, POINT width, POINT height,
-						const char *label)
+						const char *label, bool selected)
 {
-	GUI_DrawRectangle(x, y, x + width, y + height,
-					  WHITE, DRAW_EMPTY, DOT_PIXEL_1X1);
+	GUI_DrawRectangle(x, y, x + width, y + height, WHITE,
+					  selected ? DRAW_FULL : DRAW_EMPTY, DOT_PIXEL_1X1);
 	POINT text_width = Font12.Width * strlen(label);
 	GUI_DisString_EN(x + (width - text_width) / 2,
 					 y + (height - Font12.Height) / 2,
-					 label, &Font12, BLACK, WHITE);
+					 label, &Font12, selected ? WHITE : BLACK,
+					 selected ? BLACK : WHITE);
 }
 
 static void draw_status(POINT grid_x, const char *message)
@@ -84,16 +101,18 @@ int lcd_test(void)
 		 (BUTTON_ROWS - 1) * BUTTON_GAP) / BUTTON_ROWS;
 	const char *button_labels[BUTTON_COUNT] = {
 		"LED ON", "LED OFF", "RES 3",
-		"RES 4", "RES 5", "RES 6",
+		"SQUARE", "RES 5", "RES 6",
 		"RES 7", "RES 8", "RES 9"
 	};
+	bool res4_selected = false;
 
 	for (uint8_t i = 0; i < BUTTON_COUNT; i++) {
 		POINT column = i % BUTTON_COLUMNS;
 		POINT row = i / BUTTON_COLUMNS;
 		POINT x = grid_x + column * (button_width + BUTTON_GAP);
 		POINT y = grid_y + row * (button_height + BUTTON_GAP);
-		draw_button(x, y, button_width, button_height, button_labels[i]);
+		draw_button(x, y, button_width, button_height, button_labels[i],
+					false);
 	}
 
 	draw_status(grid_x, "LED OFF");
@@ -117,6 +136,18 @@ int lcd_test(void)
 					} else if (button_index == 1) {
 						gpio_put(PICO_DEFAULT_LED_PIN, 0);
 						draw_status(grid_x, "LED OFF");
+					} else if (button_index == 3) {
+						res4_selected = !res4_selected;
+						send_control_change(res4_selected
+							? MIDI_CC_SELECTED_VALUE : 0);
+
+						POINT x = grid_x + column * (button_width + BUTTON_GAP);
+						POINT y = grid_y + row * (button_height + BUTTON_GAP);
+						draw_button(x, y, button_width, button_height,
+									button_labels[button_index],
+									res4_selected);
+						draw_status(grid_x, res4_selected
+							? "CC 48 = 127" : "CC 48 = 0");
 					}
 				}
 			}
