@@ -11,7 +11,7 @@ include_directories(../lib/sdcard)
 
 # Generate link library
 add_library(examples ${DIR_EXAMPLES_SRCS})
-target_link_libraries(examples PUBLIC config lcd font fatfs sdcard pico_stdio_usb)
+target_link_libraries(examples PUBLIC config lcd font fatfs sdcard pico_stdio_usb hardware_adc)
 target_compile_definitions(examples PUBLIC
     CFG_TUD_MIDI=1
     CFG_TUD_MIDI_RX_BUFSIZE=64
