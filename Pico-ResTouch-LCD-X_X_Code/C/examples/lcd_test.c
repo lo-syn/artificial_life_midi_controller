@@ -208,10 +208,6 @@ int lcd_test(void)
 	TP_Init(lcd_scan_dir);
 	TP_GetAdFac();
 
-	gpio_init(PICO_DEFAULT_LED_PIN);
-	gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
-	gpio_put(PICO_DEFAULT_LED_PIN, 0);
-
 	adc_init();
 	adc_gpio_init(VU_ADC_GPIO);
 	adc_select_input(VU_ADC_CHANNEL);
@@ -232,7 +228,7 @@ int lcd_test(void)
 		"RES 7", "RES 8", "RES 9"
 	};
 	const uint8_t button_cc_numbers[BUTTON_COUNT] = {
-		0, 121, 122, 120, 123, 124, 125, 126, 127
+		16, 121, 122, 120, 123, 124, 125, 126, 127
 	};
 	int8_t selected_button = -1;
 	uint8_t midi_slider_values[BUTTON_COUNT] = { 0 };
@@ -289,9 +285,6 @@ int lcd_test(void)
 						}
 						if (deselecting) {
 							draw_status(grid_x, "BUTTON DESELECTED");
-						} else if (button_index == 0) {
-							gpio_put(PICO_DEFAULT_LED_PIN, 1);
-							draw_status(grid_x, "LED ON");
 						} else {
 							char status_text[32];
 							snprintf(status_text, sizeof(status_text),
@@ -300,7 +293,7 @@ int lcd_test(void)
 							draw_status(grid_x, status_text);
 						}
 					}
-				} else if (selected_button > 0 && touch_x >= slider_x &&
+				} else if (selected_button >= 0 && touch_x >= slider_x &&
 					touch_x <= slider_x + slider_width &&
 					touch_y >= slider_y && touch_y <= slider_y + slider_height) {
 					uint32_t adjusted_range = (uint32_t)(slider_height - 8);
@@ -323,7 +316,7 @@ int lcd_test(void)
 						 cc_send_enabled ? "=" : "held at",
 						 (unsigned int)midi_slider_values[selected_button]);
 					draw_status(grid_x, status_text);
-				} else if (selected_button > 0 &&
+				} else if (selected_button >= 0 &&
 					touch_x >= toggle_x && touch_x <= toggle_x + toggle_width &&
 					touch_y >= toggle_y && touch_y <= toggle_y + toggle_height) {
 					cc_send_enabled = !cc_send_enabled;
@@ -344,10 +337,10 @@ int lcd_test(void)
 		}
 
 		draw_cc_slider(slider_x, slider_y, slider_width, slider_height,
-				selected_button > 0 ? midi_slider_values[selected_button] : 0,
-				selected_button > 0);
+				selected_button >= 0 ? midi_slider_values[selected_button] : 0,
+				selected_button >= 0);
 		draw_cc_send_toggle(toggle_x, toggle_y, toggle_width, toggle_height,
-							cc_send_enabled, selected_button > 0);
+							cc_send_enabled, selected_button >= 0);
 
 		uint16_t adc_reading = adc_read();
 		draw_vu_meter(grid_x, sLCD_DIS.LCD_Dis_Page, adc_reading);
