@@ -47,7 +47,6 @@ extern LCD_DIS sLCD_DIS;
 #define BUTTON_MARGIN 8
 #define MIDI_CC_CHANNEL 0
 #define MIDI_CC_NUMBER 48
-#define MIDI_CC_SELECTED_VALUE 127
 #define VU_ADC_GPIO 26 /* Pico ADC0 input; keep the input between 0 and 3.3V. */
 #define VU_ADC_CHANNEL 0
 #define VU_ADC_MAX_MILLIVOLTS 3300u
@@ -72,6 +71,10 @@ static void send_control_change(uint8_t value)
 static void draw_button(POINT x, POINT y, POINT width, POINT height,
 						const char *label, bool selected)
 {
+	if (!selected) {
+		GUI_DrawRectangle(x, y, x + width, y + height, BLACK,
+						  DRAW_FULL, DOT_PIXEL_1X1);
+	}
 	GUI_DrawRectangle(x, y, x + width, y + height, WHITE,
 					  selected ? DRAW_FULL : DRAW_EMPTY, DOT_PIXEL_1X1);
 	POINT text_width = Font12.Width * strlen(label);
@@ -88,21 +91,58 @@ static void draw_status(POINT grid_x, const char *message)
 	GUI_DisString_EN(10, 10, message, &Font12, BLACK, WHITE);
 }
 
+static void draw_cc_slider(POINT x, POINT y, POINT width, POINT height,
+						  uint8_t value, bool visible)
+{
+	if (!visible) {
+		GUI_DrawRectangle(x - 3, y - 3, x + width + 3, y + height + 3, BLACK,
+					  DRAW_FULL, DOT_PIXEL_1X1);
+		return;
+	}
+
+	GUI_DrawRectangle(x, y, x + width, y + height, WHITE,
+					  DRAW_EMPTY, DOT_PIXEL_1X1);
+	POINT inner_x0 = x + 3;
+	POINT inner_x1 = x + width - 3;
+	POINT track_top = y + 4;
+	POINT track_bottom = y + height - 4;
+	POINT fill_height = (POINT)((uint32_t)(value * (track_bottom - track_top + 1)) /
+							   127u);
+	POINT fill_top = track_bottom - fill_height + 1;
+	GUI_DrawRectangle(inner_x0, track_top, inner_x1, fill_top - 1,
+					  BLACK, DRAW_FULL, DOT_PIXEL_1X1);
+	GUI_DrawRectangle(inner_x0, fill_top, inner_x1, track_bottom,
+					  GREEN, DRAW_FULL, DOT_PIXEL_1X1);
+}
+
+static void draw_cc_send_toggle(POINT x, POINT y, POINT width, POINT height,
+								bool enabled, bool visible)
+{
+	if (!visible) {
+		GUI_DrawRectangle(x - 2, y - 2, x + width + 2, y + height + 2,
+						  BLACK, DRAW_FULL, DOT_PIXEL_1X1);
+		return;
+	}
+
+	COLOR background = enabled ? WHITE : BLACK;
+	GUI_DrawRectangle(x + 1, y + 1, x + width - 1, y + height - 1,
+					  background, DRAW_FULL, DOT_PIXEL_1X1);
+	GUI_DrawRectangle(x, y, x + width, y + height, WHITE,
+					  DRAW_EMPTY, DOT_PIXEL_1X1);
+}
+
 static void draw_vu_meter_frame(POINT grid_x, POINT screen_height)
 {
 	const POINT meter_top = 72;
 	const POINT meter_bottom = screen_height - 48;
-	const POINT meter_x = (grid_x - VU_BAR_WIDTH) / 2;
+	const POINT meter_x = 12;
+	const POINT label_x = meter_x + VU_BAR_WIDTH + 8;
 	const POINT segment_height =
 		(meter_bottom - meter_top - 1 -
 		 (VU_BAR_SEGMENTS - 1) * VU_BAR_GAP) / VU_BAR_SEGMENTS;
-	const char *title = "ADC VU";
-	POINT title_width = Font12.Width * strlen(title);
 
-	GUI_DisString_EN((grid_x - title_width) / 2, 42, title,
-					 &Font12, BLACK, WHITE);
-	GUI_DisString_EN(8, meter_top - 5, "3.3V", &Font12, BLACK, WHITE);
-	GUI_DisString_EN(8, meter_bottom - 6, "0V", &Font12, BLACK, WHITE);
+	GUI_DisString_EN(label_x, meter_top - 5, "3.3V", &Font12, BLACK, WHITE);
+	GUI_DisString_EN(label_x, meter_bottom - 6, "0V", &Font12, BLACK, WHITE);
 	for (uint8_t segment = 0; segment < VU_BAR_SEGMENTS; segment++) {
 		POINT segment_bottom = meter_bottom - 1 -
 			segment * (segment_height + VU_BAR_GAP);
@@ -119,7 +159,7 @@ static void draw_vu_meter(POINT grid_x, POINT screen_height,
 	static uint16_t previous_display_mv = UINT16_MAX;
 	const POINT meter_top = 72;
 	const POINT meter_bottom = screen_height - 48;
-	const POINT meter_x = (grid_x - VU_BAR_WIDTH) / 2;
+	const POINT meter_x = 12;
 	const uint32_t millivolts =
 		(uint32_t)adc_reading * VU_ADC_MAX_MILLIVOLTS / VU_ADC_MAX_READING;
 	const uint16_t display_mv = (uint16_t)((millivolts / 10u) * 10u);
@@ -151,8 +191,8 @@ static void draw_vu_meter(POINT grid_x, POINT screen_height,
 			 (unsigned int)(display_mv / 1000u),
 			 (unsigned int)((display_mv % 1000u) / 10u));
 	POINT value_width = Font12.Width * strlen(value_text);
-	POINT value_x = (grid_x - value_width) / 2;
-	POINT value_y = screen_height - 30;
+	POINT value_x = meter_x + (VU_BAR_WIDTH - value_width) / 2;
+	POINT value_y = meter_bottom + 8;
 	GUI_DrawRectangle(value_x, value_y, value_x + value_width,
 					  value_y + Font12.Height, BLACK, DRAW_FULL,
 					  DOT_PIXEL_1X1);
@@ -193,11 +233,24 @@ int lcd_test(void)
 		"SQUARE", "VU SIM", "RES 6",
 		"RES 7", "RES 8", "RES 9"
 	};
-	bool res4_selected = false;
 	bool vu_sim_enabled = false;
 	uint8_t simulated_level = 0;
 	int8_t simulated_direction = 1;
 	uint32_t last_simulated_step_us = time_us_32();
+	int8_t selected_button = -1;
+	uint8_t midi_slider_value = 0;
+	bool button_selected[BUTTON_COUNT] = { false };
+	const POINT left_meter_x = 12;
+	const POINT meter_end_x = left_meter_x + VU_BAR_WIDTH + 44;
+	const POINT slider_width = 24;
+	const POINT slider_height = 150;
+	const POINT slider_x = ((grid_x + meter_end_x) / 2) - (slider_width / 2);
+	const POINT slider_y = 90;
+	const POINT toggle_width = slider_width;
+	const POINT toggle_height = 26;
+	const POINT toggle_x = slider_x;
+	const POINT toggle_y = slider_y + slider_height + 12;
+	bool cc_send_enabled = false;
 
 	for (uint8_t i = 0; i < BUTTON_COUNT; i++) {
 		POINT column = i % BUTTON_COLUMNS;
@@ -207,6 +260,10 @@ int lcd_test(void)
 		draw_button(x, y, button_width, button_height, button_labels[i],
 					false);
 	}
+	draw_cc_slider(slider_x, slider_y, slider_width, slider_height,
+					midi_slider_value, false);
+	draw_cc_send_toggle(toggle_x, toggle_y, toggle_width, toggle_height,
+							false, false);
 
 	draw_status(grid_x, "ADC INPUT");
 	bool touch_latched = false;
@@ -214,53 +271,89 @@ int lcd_test(void)
 	POINT touch_y;
 	while(1) {
 		if (TP_GetTouchPoint(&touch_x, &touch_y)) {
-			if (!touch_latched && touch_x >= grid_x && touch_y >= grid_y) {
-				POINT local_x = touch_x - grid_x;
-				POINT local_y = touch_y - grid_y;
-				POINT column = local_x / (button_width + BUTTON_GAP);
-				POINT row = local_y / (button_height + BUTTON_GAP);
-				if (column < BUTTON_COLUMNS && row < BUTTON_ROWS &&
-					local_x % (button_width + BUTTON_GAP) < button_width &&
-					local_y % (button_height + BUTTON_GAP) < button_height) {
-					POINT button_index = row * BUTTON_COLUMNS + column;
-					if (button_index == 0) {
-						gpio_put(PICO_DEFAULT_LED_PIN, 1);
-						draw_status(grid_x, "LED ON");
-					} else if (button_index == 1) {
-						gpio_put(PICO_DEFAULT_LED_PIN, 0);
-						draw_status(grid_x, "LED OFF");
-					} else if (button_index == 3) {
-						res4_selected = !res4_selected;
-						send_control_change(res4_selected
-							? MIDI_CC_SELECTED_VALUE : 0);
-
-						POINT x = grid_x + column * (button_width + BUTTON_GAP);
-						POINT y = grid_y + row * (button_height + BUTTON_GAP);
-						draw_button(x, y, button_width, button_height,
-									button_labels[button_index],
-									res4_selected);
-						draw_status(grid_x, res4_selected
-							? "CC 48 = 127" : "CC 48 = 0");
-					} else if (button_index == 4) {
-						vu_sim_enabled = !vu_sim_enabled;
-						simulated_level = 0;
-						simulated_direction = 1;
-						last_simulated_step_us = time_us_32();
-
-						POINT x = grid_x + column * (button_width + BUTTON_GAP);
-						POINT y = grid_y + row * (button_height + BUTTON_GAP);
-						draw_button(x, y, button_width, button_height,
-									button_labels[button_index],
-									vu_sim_enabled);
-						draw_status(grid_x, vu_sim_enabled
-							? "VU SIM ON" : "ADC INPUT");
+			if (!touch_latched) {
+				if (touch_x >= grid_x && touch_y >= grid_y) {
+					POINT local_x = touch_x - grid_x;
+					POINT local_y = touch_y - grid_y;
+					POINT column = local_x / (button_width + BUTTON_GAP);
+					POINT row = local_y / (button_height + BUTTON_GAP);
+					if (column < BUTTON_COLUMNS && row < BUTTON_ROWS &&
+						local_x % (button_width + BUTTON_GAP) < button_width &&
+						local_y % (button_height + BUTTON_GAP) < button_height) {
+						POINT button_index = row * BUTTON_COLUMNS + column;
+						bool deselecting = selected_button == (int8_t)button_index;
+						selected_button = deselecting
+							? -1 : (int8_t)button_index;
+						for (uint8_t i = 0; i < BUTTON_COUNT; i++) {
+							button_selected[i] =
+								!deselecting && i == button_index;
+							POINT x = grid_x + (i % BUTTON_COLUMNS) * (button_width + BUTTON_GAP);
+							POINT y = grid_y + (i / BUTTON_COLUMNS) * (button_height + BUTTON_GAP);
+							draw_button(x, y, button_width, button_height,
+										button_labels[i], button_selected[i]);
+						}
+						if (deselecting) {
+							draw_status(grid_x, "BUTTON DESELECTED");
+						} else if (button_index == 0) {
+							gpio_put(PICO_DEFAULT_LED_PIN, 1);
+							draw_status(grid_x, "LED ON");
+						} else if (button_index == 1) {
+							gpio_put(PICO_DEFAULT_LED_PIN, 0);
+							draw_status(grid_x, "LED OFF");
+						} else if (button_index == 3) {
+							draw_status(grid_x, "SQUARE SELECTED");
+						} else if (button_index == 4) {
+							vu_sim_enabled = !vu_sim_enabled;
+							simulated_level = 0;
+							simulated_direction = 1;
+							last_simulated_step_us = time_us_32();
+							draw_status(grid_x, vu_sim_enabled ? "VU SIM ON" : "ADC INPUT");
+						} else {
+							draw_status(grid_x, "CC 48 SELECTED");
+						}
 					}
+				} else if (selected_button == 3 && touch_x >= slider_x &&
+					touch_x <= slider_x + slider_width &&
+					touch_y >= slider_y && touch_y <= slider_y + slider_height) {
+					uint32_t adjusted_range = (uint32_t)(slider_height - 8);
+					uint32_t relative = (uint32_t)(touch_y - (slider_y + 4));
+					if (relative > adjusted_range) {
+						relative = adjusted_range;
+					}
+					midi_slider_value = (uint8_t)(127u -
+						((relative * 127u) / adjusted_range));
+					if (cc_send_enabled) {
+						send_control_change(midi_slider_value);
+					}
+					draw_cc_slider(slider_x, slider_y, slider_width, slider_height,
+						midi_slider_value, true);
+					char status_text[32];
+					snprintf(status_text, sizeof(status_text), "CC 48 %s %u",
+						 cc_send_enabled ? "=" : "held at",
+						 (unsigned int)midi_slider_value);
+					draw_status(grid_x, status_text);
+				} else if (selected_button == 3 &&
+					touch_x >= toggle_x && touch_x <= toggle_x + toggle_width &&
+					touch_y >= toggle_y && touch_y <= toggle_y + toggle_height) {
+					cc_send_enabled = !cc_send_enabled;
+					if (cc_send_enabled) {
+						send_control_change(midi_slider_value);
+					}
+					draw_cc_send_toggle(toggle_x, toggle_y, toggle_width,
+										toggle_height, cc_send_enabled, true);
+					draw_status(grid_x, cc_send_enabled
+						? "CC SEND ON" : "CC SEND OFF");
 				}
 			}
 			touch_latched = true;
 		} else {
 			touch_latched = false;
 		}
+
+		draw_cc_slider(slider_x, slider_y, slider_width, slider_height,
+				midi_slider_value, selected_button == 3);
+		draw_cc_send_toggle(toggle_x, toggle_y, toggle_width, toggle_height,
+							cc_send_enabled, selected_button == 3);
 
 		uint16_t adc_reading;
 		if (vu_sim_enabled) {
