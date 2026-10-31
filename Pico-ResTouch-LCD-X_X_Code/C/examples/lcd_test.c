@@ -46,22 +46,20 @@ extern LCD_DIS sLCD_DIS;
 #define BUTTON_GAP 6
 #define BUTTON_MARGIN 8
 #define MIDI_CC_CHANNEL 0
-#define MIDI_CC_NUMBER 48
 #define VU_ADC_GPIO 26 /* Pico ADC0 input; keep the input between 0 and 3.3V. */
 #define VU_ADC_CHANNEL 0
 #define VU_ADC_MAX_MILLIVOLTS 3300u
 #define VU_ADC_MAX_READING 4095u
-#define VU_SIM_STEP_US 250000u
 #define VU_BAR_WIDTH 40
 #define VU_BAR_SEGMENTS 9
 #define VU_BAR_GAP 3
 
-static void send_control_change(uint8_t value)
+static void send_control_change(uint8_t cc_number, uint8_t value)
 {
 	if (tud_mounted()) {
 		uint8_t message[] = {
 			(uint8_t)(0xB0 | MIDI_CC_CHANNEL),
-			MIDI_CC_NUMBER,
+			cc_number,
 			value
 		};
 		tud_midi_stream_write(0, message, sizeof(message));
@@ -230,16 +228,14 @@ int lcd_test(void)
 	draw_vu_meter_frame(grid_x, sLCD_DIS.LCD_Dis_Page);
 	const char *button_labels[BUTTON_COUNT] = {
 		"LED ON", "LED OFF", "RES 3",
-		"SQUARE", "VU SIM", "RES 6",
+		"AMP", "VU SIM", "RES 6",
 		"RES 7", "RES 8", "RES 9"
 	};
-	bool vu_sim_enabled = false;
-	uint8_t simulated_level = 0;
-	int8_t simulated_direction = 1;
-	uint32_t last_simulated_step_us = time_us_32();
+	const uint8_t button_cc_numbers[BUTTON_COUNT] = {
+		0, 121, 122, 120, 123, 124, 125, 126, 127
+	};
 	int8_t selected_button = -1;
-	uint8_t midi_slider_value = 0;
-	bool button_selected[BUTTON_COUNT] = { false };
+	uint8_t midi_slider_values[BUTTON_COUNT] = { 0 };
 	const POINT left_meter_x = 12;
 	const POINT meter_end_x = left_meter_x + VU_BAR_WIDTH + 44;
 	const POINT slider_width = 24;
@@ -261,7 +257,7 @@ int lcd_test(void)
 					false);
 	}
 	draw_cc_slider(slider_x, slider_y, slider_width, slider_height,
-					midi_slider_value, false);
+					0, false);
 	draw_cc_send_toggle(toggle_x, toggle_y, toggle_width, toggle_height,
 							false, false);
 
@@ -285,34 +281,26 @@ int lcd_test(void)
 						selected_button = deselecting
 							? -1 : (int8_t)button_index;
 						for (uint8_t i = 0; i < BUTTON_COUNT; i++) {
-							button_selected[i] =
-								!deselecting && i == button_index;
 							POINT x = grid_x + (i % BUTTON_COLUMNS) * (button_width + BUTTON_GAP);
 							POINT y = grid_y + (i / BUTTON_COLUMNS) * (button_height + BUTTON_GAP);
 							draw_button(x, y, button_width, button_height,
-										button_labels[i], button_selected[i]);
+										button_labels[i],
+										!deselecting && i == button_index);
 						}
 						if (deselecting) {
 							draw_status(grid_x, "BUTTON DESELECTED");
 						} else if (button_index == 0) {
 							gpio_put(PICO_DEFAULT_LED_PIN, 1);
 							draw_status(grid_x, "LED ON");
-						} else if (button_index == 1) {
-							gpio_put(PICO_DEFAULT_LED_PIN, 0);
-							draw_status(grid_x, "LED OFF");
-						} else if (button_index == 3) {
-							draw_status(grid_x, "SQUARE SELECTED");
-						} else if (button_index == 4) {
-							vu_sim_enabled = !vu_sim_enabled;
-							simulated_level = 0;
-							simulated_direction = 1;
-							last_simulated_step_us = time_us_32();
-							draw_status(grid_x, vu_sim_enabled ? "VU SIM ON" : "ADC INPUT");
 						} else {
-							draw_status(grid_x, "CC 48 SELECTED");
+							char status_text[32];
+							snprintf(status_text, sizeof(status_text),
+									 "CC %u SELECTED",
+									 (unsigned int)button_cc_numbers[button_index]);
+							draw_status(grid_x, status_text);
 						}
 					}
-				} else if (selected_button == 3 && touch_x >= slider_x &&
+				} else if (selected_button > 0 && touch_x >= slider_x &&
 					touch_x <= slider_x + slider_width &&
 					touch_y >= slider_y && touch_y <= slider_y + slider_height) {
 					uint32_t adjusted_range = (uint32_t)(slider_height - 8);
@@ -320,24 +308,29 @@ int lcd_test(void)
 					if (relative > adjusted_range) {
 						relative = adjusted_range;
 					}
-					midi_slider_value = (uint8_t)(127u -
+					midi_slider_values[selected_button] = (uint8_t)(127u -
 						((relative * 127u) / adjusted_range));
 					if (cc_send_enabled) {
-						send_control_change(midi_slider_value);
+						send_control_change(
+							button_cc_numbers[selected_button],
+							midi_slider_values[selected_button]);
 					}
 					draw_cc_slider(slider_x, slider_y, slider_width, slider_height,
-						midi_slider_value, true);
+						midi_slider_values[selected_button], true);
 					char status_text[32];
-					snprintf(status_text, sizeof(status_text), "CC 48 %s %u",
+					snprintf(status_text, sizeof(status_text), "CC %u %s %u",
+						 (unsigned int)button_cc_numbers[selected_button],
 						 cc_send_enabled ? "=" : "held at",
-						 (unsigned int)midi_slider_value);
+						 (unsigned int)midi_slider_values[selected_button]);
 					draw_status(grid_x, status_text);
-				} else if (selected_button == 3 &&
+				} else if (selected_button > 0 &&
 					touch_x >= toggle_x && touch_x <= toggle_x + toggle_width &&
 					touch_y >= toggle_y && touch_y <= toggle_y + toggle_height) {
 					cc_send_enabled = !cc_send_enabled;
 					if (cc_send_enabled) {
-						send_control_change(midi_slider_value);
+						send_control_change(
+							button_cc_numbers[selected_button],
+							midi_slider_values[selected_button]);
 					}
 					draw_cc_send_toggle(toggle_x, toggle_y, toggle_width,
 										toggle_height, cc_send_enabled, true);
@@ -351,28 +344,12 @@ int lcd_test(void)
 		}
 
 		draw_cc_slider(slider_x, slider_y, slider_width, slider_height,
-				midi_slider_value, selected_button == 3);
+				selected_button > 0 ? midi_slider_values[selected_button] : 0,
+				selected_button > 0);
 		draw_cc_send_toggle(toggle_x, toggle_y, toggle_width, toggle_height,
-							cc_send_enabled, selected_button == 3);
+							cc_send_enabled, selected_button > 0);
 
-		uint16_t adc_reading;
-		if (vu_sim_enabled) {
-			uint32_t now_us = time_us_32();
-			if ((uint32_t)(now_us - last_simulated_step_us) >=
-				VU_SIM_STEP_US) {
-				if (simulated_level == 0) {
-					simulated_direction = 1;
-				} else if (simulated_level == VU_BAR_SEGMENTS) {
-					simulated_direction = -1;
-				}
-				simulated_level += simulated_direction;
-				last_simulated_step_us = now_us;
-			}
-			adc_reading = (uint16_t)((uint32_t)simulated_level *
-				VU_ADC_MAX_READING / VU_BAR_SEGMENTS);
-		} else {
-			adc_reading = adc_read();
-		}
+		uint16_t adc_reading = adc_read();
 		draw_vu_meter(grid_x, sLCD_DIS.LCD_Dis_Page, adc_reading);
 
 		sleep_ms(20);
