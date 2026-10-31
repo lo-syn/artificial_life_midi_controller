@@ -40,12 +40,15 @@
 
 extern LCD_DIS sLCD_DIS;
 
-#define BUTTON_ROWS 3
+#define BUTTON_ROWS 6
 #define BUTTON_COLUMNS 3
-#define BUTTON_COUNT (BUTTON_ROWS * BUTTON_COLUMNS)
+#define COLOR_BUTTON_START ((BUTTON_ROWS - 2) * BUTTON_COLUMNS)
+#define TOGGLE_BUTTON_START (COLOR_BUTTON_START + 4)
+#define BUTTON_COUNT (TOGGLE_BUTTON_START + 4)
 #define BUTTON_GAP 6
 #define BUTTON_MARGIN 8
 #define MIDI_CC_CHANNEL 0
+#define OSC_VIEW_CC_NUMBER 46
 #define VU_ADC_GPIO 26 /* Pico ADC0 input; keep the input between 0 and 3.3V. */
 #define VU_ADC_CHANNEL 0
 #define VU_ADC_MAX_MILLIVOLTS 3300u
@@ -80,6 +83,14 @@ static void draw_button(POINT x, POINT y, POINT width, POINT height,
 					 y + (height - Font12.Height) / 2,
 					 label, &Font12, selected ? WHITE : BLACK,
 					 selected ? BLACK : WHITE);
+}
+
+static void draw_osc_view_button(POINT x, POINT y, POINT width, POINT height,
+								 bool osc2_view_enabled)
+{
+	draw_button(x, y, width, height,
+				osc2_view_enabled ? "OSC2 VIEW" : "OSC1 VIEW",
+				osc2_view_enabled);
 }
 
 static void draw_status(POINT grid_x, const char *message)
@@ -218,117 +229,276 @@ int lcd_test(void)
 	POINT button_width =
 		(sLCD_DIS.LCD_Dis_Column - grid_x - BUTTON_MARGIN -
 		 (BUTTON_COLUMNS - 1) * BUTTON_GAP) / BUTTON_COLUMNS;
+	POINT button_table_width =
+		BUTTON_COLUMNS * button_width + (BUTTON_COLUMNS - 1) * BUTTON_GAP;
+	POINT final_row_button_width =
+		(button_table_width - 3 * BUTTON_GAP) / 4;
 	POINT button_height =
 		(sLCD_DIS.LCD_Dis_Page - 2 * BUTTON_MARGIN -
 		 (BUTTON_ROWS - 1) * BUTTON_GAP) / BUTTON_ROWS;
 	draw_vu_meter_frame(grid_x, sLCD_DIS.LCD_Dis_Page);
 	const char *button_labels[BUTTON_COUNT] = {
-		"LED ON", "LED OFF", "RES 3",
-		"AMP", "VU SIM", "RES 6",
-		"RES 7", "RES 8", "RES 9"
+		"OSC1 AMP", "OSC1 MOVE", "OSC1 PM",
+		"OSC1 RATE", "OSC1 FREQ", "OSC1 RM",
+		"OSC2 AMP", "OSC2 MOVE", "OSC2 PM",
+		"OSC2 RATE", "OSC2 FREQ", "OSC2 RM",
+		"SAT", "BAND1", "BAND2", "BAND3",
+		"OSC1 FB", "OSC2 FB", "M/DIST", "F/DIST"
 	};
 	const uint8_t button_cc_numbers[BUTTON_COUNT] = {
-		16, 121, 122, 120, 123, 124, 125, 126, 127
+		120, 121, 122, 16, 17, 18, 123, 124, 125, 19, 20, 21,
+		22, 22, 22, 22, 0, 0, 0, 0
+	};
+	const uint8_t button_toggle_cc_numbers[BUTTON_COUNT] = {
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		70, 0, 38, 54, 43, 44, 60, 61
 	};
 	int8_t selected_button = -1;
-	uint8_t midi_slider_values[BUTTON_COUNT] = { 0 };
+	uint8_t midi_slider_values[BUTTON_COUNT][2] = { { 0 } };
+	bool button_toggle_states[BUTTON_COUNT] = { false };
 	const POINT left_meter_x = 12;
 	const POINT meter_end_x = left_meter_x + VU_BAR_WIDTH + 44;
 	const POINT slider_width = 24;
 	const POINT slider_height = 150;
-	const POINT slider_x = ((grid_x + meter_end_x) / 2) - (slider_width / 2);
+	const POINT slider_x = ((grid_x + meter_end_x) / 2) -
+		(slider_width / 2) - 18;
+	const POINT second_slider_x = slider_x + slider_width + 10;
 	const POINT slider_y = 90;
+	const POINT view_button_width = Font12.Width * strlen("OSC1 VIEW") + 8;
+	const POINT view_button_x = grid_x - view_button_width - BUTTON_GAP;
+	const POINT view_button_y = grid_y;
+	bool osc2_view_enabled = false;
 	const POINT toggle_width = slider_width;
 	const POINT toggle_height = 26;
 	const POINT toggle_x = slider_x;
+	const POINT second_toggle_x = second_slider_x;
 	const POINT toggle_y = slider_y + slider_height + 12;
-	bool cc_send_enabled = false;
+	bool cc_send_enabled[2] = { false, false };
 
 	for (uint8_t i = 0; i < BUTTON_COUNT; i++) {
-		POINT column = i % BUTTON_COLUMNS;
-		POINT row = i / BUTTON_COLUMNS;
-		POINT x = grid_x + column * (button_width + BUTTON_GAP);
+		POINT row = i < COLOR_BUTTON_START
+			? i / BUTTON_COLUMNS
+			: BUTTON_ROWS - 2 + (i - COLOR_BUTTON_START) / 4;
+		POINT column = i < COLOR_BUTTON_START
+			? i % BUTTON_COLUMNS : (i - COLOR_BUTTON_START) % 4;
+		POINT current_button_width = i >= COLOR_BUTTON_START
+			? final_row_button_width : button_width;
+		POINT x = grid_x + column * (current_button_width + BUTTON_GAP);
 		POINT y = grid_y + row * (button_height + BUTTON_GAP);
-		draw_button(x, y, button_width, button_height, button_labels[i],
-					false);
+		draw_button(x, y, current_button_width, button_height, button_labels[i],
+					button_toggle_states[i]);
 	}
+	draw_osc_view_button(view_button_x, view_button_y, view_button_width,
+		button_height, false);
 	draw_cc_slider(slider_x, slider_y, slider_width, slider_height,
+					0, false);
+	draw_cc_slider(second_slider_x, slider_y, slider_width, slider_height,
 					0, false);
 	draw_cc_send_toggle(toggle_x, toggle_y, toggle_width, toggle_height,
 							false, false);
+	draw_cc_send_toggle(second_toggle_x, toggle_y, toggle_width, toggle_height,
+							false, false);
 
 	draw_status(grid_x, "ADC INPUT");
+	draw_osc_view_button(view_button_x, view_button_y, view_button_width,
+		button_height, osc2_view_enabled);
 	bool touch_latched = false;
 	POINT touch_x;
 	POINT touch_y;
 	while(1) {
 		if (TP_GetTouchPoint(&touch_x, &touch_y)) {
 			if (!touch_latched) {
-				if (touch_x >= grid_x && touch_y >= grid_y) {
+				if (touch_x >= view_button_x &&
+					touch_x <= view_button_x + view_button_width &&
+					touch_y >= view_button_y &&
+					touch_y <= view_button_y + button_height) {
+					osc2_view_enabled = !osc2_view_enabled;
+					send_control_change(OSC_VIEW_CC_NUMBER,
+						osc2_view_enabled ? 127 : 0);
+					draw_status(grid_x, osc2_view_enabled
+						? "OSC 2 VIEW" : "OSC1 VIEW");
+					draw_osc_view_button(view_button_x, view_button_y,
+						view_button_width, button_height,
+						osc2_view_enabled);
+				} else if (touch_x >= grid_x && touch_y >= grid_y) {
 					POINT local_x = touch_x - grid_x;
 					POINT local_y = touch_y - grid_y;
-					POINT column = local_x / (button_width + BUTTON_GAP);
 					POINT row = local_y / (button_height + BUTTON_GAP);
-					if (column < BUTTON_COLUMNS && row < BUTTON_ROWS &&
-						local_x % (button_width + BUTTON_GAP) < button_width &&
+					if (row < BUTTON_ROWS &&
 						local_y % (button_height + BUTTON_GAP) < button_height) {
-						POINT button_index = row * BUTTON_COLUMNS + column;
-						bool deselecting = selected_button == (int8_t)button_index;
-						selected_button = deselecting
-							? -1 : (int8_t)button_index;
-						for (uint8_t i = 0; i < BUTTON_COUNT; i++) {
-							POINT x = grid_x + (i % BUTTON_COLUMNS) * (button_width + BUTTON_GAP);
-							POINT y = grid_y + (i / BUTTON_COLUMNS) * (button_height + BUTTON_GAP);
-							draw_button(x, y, button_width, button_height,
-										button_labels[i],
-										!deselecting && i == button_index);
-						}
-						if (deselecting) {
-							draw_status(grid_x, "BUTTON DESELECTED");
-						} else {
-							char status_text[32];
-							snprintf(status_text, sizeof(status_text),
-									 "CC %u SELECTED",
-									 (unsigned int)button_cc_numbers[button_index]);
-							draw_status(grid_x, status_text);
+						bool is_four_button_row = row >= BUTTON_ROWS - 2;
+						POINT current_button_width = is_four_button_row
+							? final_row_button_width : button_width;
+						POINT row_columns = is_four_button_row
+							? 4 : BUTTON_COLUMNS;
+						POINT column = local_x /
+							(current_button_width + BUTTON_GAP);
+						if (column < row_columns &&
+							local_x % (current_button_width + BUTTON_GAP) <
+								current_button_width) {
+							POINT button_index = is_four_button_row
+								? COLOR_BUTTON_START +
+									(row - (BUTTON_ROWS - 2)) * 4 + column
+								: row * BUTTON_COLUMNS + column;
+							if (button_index >= TOGGLE_BUTTON_START) {
+								button_toggle_states[button_index] =
+									!button_toggle_states[button_index];
+								send_control_change(
+									button_toggle_cc_numbers[button_index],
+									button_toggle_states[button_index] ? 127 : 0);
+								POINT x = grid_x + column *
+									(final_row_button_width + BUTTON_GAP);
+								POINT y = grid_y + row *
+									(button_height + BUTTON_GAP);
+								draw_button(x, y, final_row_button_width,
+									button_height, button_labels[button_index],
+									button_toggle_states[button_index]);
+								char status_text[32];
+								snprintf(status_text, sizeof(status_text),
+									"CC %u = %u",
+									(unsigned int)button_toggle_cc_numbers[button_index],
+									button_toggle_states[button_index] ? 127u : 0u);
+								draw_status(grid_x, status_text);
+								draw_osc_view_button(view_button_x, view_button_y,
+									view_button_width, button_height,
+									osc2_view_enabled);
+							} else {
+								bool deselecting =
+									selected_button == (int8_t)button_index;
+								if (selected_button >= 0 &&
+									button_toggle_cc_numbers[selected_button] != 0) {
+									send_control_change(
+										button_toggle_cc_numbers[selected_button],
+										0);
+								}
+								selected_button = deselecting
+									? -1 : (int8_t)button_index;
+								if (!deselecting &&
+									button_toggle_cc_numbers[button_index] != 0) {
+									send_control_change(
+										button_toggle_cc_numbers[button_index],
+										127);
+								}
+								for (uint8_t i = 0; i < BUTTON_COUNT; i++) {
+									POINT button_row = i < COLOR_BUTTON_START
+										? i / BUTTON_COLUMNS
+										: BUTTON_ROWS - 2 +
+											(i - COLOR_BUTTON_START) / 4;
+									POINT button_column = i < COLOR_BUTTON_START
+										? i % BUTTON_COLUMNS
+										: (i - COLOR_BUTTON_START) % 4;
+									POINT button_width_for_row =
+										i >= COLOR_BUTTON_START
+										? final_row_button_width : button_width;
+									POINT x = grid_x + button_column *
+										(button_width_for_row + BUTTON_GAP);
+									POINT y = grid_y + button_row *
+										(button_height + BUTTON_GAP);
+									draw_button(x, y, button_width_for_row,
+										button_height, button_labels[i],
+										button_toggle_states[i] ||
+										(!deselecting && i == button_index));
+								}
+								if (deselecting) {
+									draw_status(grid_x, "BUTTON DESELECTED");
+								} else {
+									char status_text[32];
+									snprintf(status_text, sizeof(status_text),
+										"CC %u SELECTED",
+										(unsigned int)button_cc_numbers[button_index]);
+									draw_status(grid_x, status_text);
+								}
+								draw_osc_view_button(view_button_x, view_button_y,
+									view_button_width, button_height,
+									osc2_view_enabled);
+							}
 						}
 					}
-				} else if (selected_button >= 0 && touch_x >= slider_x &&
-					touch_x <= slider_x + slider_width &&
-					touch_y >= slider_y && touch_y <= slider_y + slider_height) {
+				} else if (selected_button >= 0 &&
+					touch_y >= slider_y && touch_y <= slider_y + slider_height &&
+					((touch_x >= slider_x &&
+					  touch_x <= slider_x + slider_width) ||
+					 (selected_button >= COLOR_BUTTON_START &&
+					  selected_button < TOGGLE_BUTTON_START &&
+					  touch_x >= second_slider_x &&
+					  touch_x <= second_slider_x + slider_width))) {
+					uint8_t slider_index = touch_x >= second_slider_x ? 1 : 0;
+					uint8_t slider_cc_number =
+						selected_button >= COLOR_BUTTON_START &&
+						selected_button < TOGGLE_BUTTON_START
+						? (slider_index == 0 ? 22 : 126)
+						: button_cc_numbers[selected_button];
+					POINT active_slider_x =
+						slider_index == 1 ? second_slider_x : slider_x;
 					uint32_t adjusted_range = (uint32_t)(slider_height - 8);
 					uint32_t relative = (uint32_t)(touch_y - (slider_y + 4));
 					if (relative > adjusted_range) {
 						relative = adjusted_range;
 					}
-					midi_slider_values[selected_button] = (uint8_t)(127u -
+					midi_slider_values[selected_button][slider_index] = (uint8_t)(127u -
 						((relative * 127u) / adjusted_range));
-					if (cc_send_enabled) {
+					if (cc_send_enabled[slider_index]) {
 						send_control_change(
-							button_cc_numbers[selected_button],
-							midi_slider_values[selected_button]);
+							slider_cc_number,
+							midi_slider_values[selected_button][slider_index]);
 					}
-					draw_cc_slider(slider_x, slider_y, slider_width, slider_height,
-						midi_slider_values[selected_button], true);
+					draw_cc_slider(active_slider_x, slider_y, slider_width,
+						slider_height,
+						midi_slider_values[selected_button][slider_index], true);
 					char status_text[32];
 					snprintf(status_text, sizeof(status_text), "CC %u %s %u",
-						 (unsigned int)button_cc_numbers[selected_button],
-						 cc_send_enabled ? "=" : "held at",
-						 (unsigned int)midi_slider_values[selected_button]);
+						 (unsigned int)slider_cc_number,
+						 cc_send_enabled[slider_index] ? "=" : "held at",
+						 (unsigned int)midi_slider_values[selected_button][slider_index]);
 					draw_status(grid_x, status_text);
+					draw_osc_view_button(view_button_x, view_button_y,
+						view_button_width, button_height,
+						osc2_view_enabled);
 				} else if (selected_button >= 0 &&
-					touch_x >= toggle_x && touch_x <= toggle_x + toggle_width &&
-					touch_y >= toggle_y && touch_y <= toggle_y + toggle_height) {
-					cc_send_enabled = !cc_send_enabled;
-					if (cc_send_enabled) {
+					touch_y >= toggle_y && touch_y <= toggle_y + toggle_height &&
+					((touch_x >= toggle_x &&
+					  touch_x <= toggle_x + toggle_width) ||
+					 (selected_button >= COLOR_BUTTON_START &&
+					  selected_button < TOGGLE_BUTTON_START &&
+					  touch_x >= second_toggle_x &&
+					  touch_x <= second_toggle_x + toggle_width))) {
+					uint8_t slider_index =
+						touch_x >= second_toggle_x ? 1 : 0;
+					uint8_t slider_cc_number =
+						selected_button >= COLOR_BUTTON_START &&
+						selected_button < TOGGLE_BUTTON_START
+						? (slider_index == 0 ? 22 : 126)
+						: button_cc_numbers[selected_button];
+					POINT active_toggle_x =
+						slider_index == 1 ? second_toggle_x : toggle_x;
+					cc_send_enabled[slider_index] =
+						!cc_send_enabled[slider_index];
+					if (cc_send_enabled[slider_index]) {
 						send_control_change(
-							button_cc_numbers[selected_button],
-							midi_slider_values[selected_button]);
+							slider_cc_number,
+							midi_slider_values[selected_button][slider_index]);
 					}
-					draw_cc_send_toggle(toggle_x, toggle_y, toggle_width,
-										toggle_height, cc_send_enabled, true);
-					draw_status(grid_x, cc_send_enabled
-						? "CC SEND ON" : "CC SEND OFF");
+					draw_cc_send_toggle(active_toggle_x, toggle_y,
+						toggle_width, toggle_height,
+						cc_send_enabled[slider_index], true);
+					char status_text[32];
+					if (cc_send_enabled[slider_index] &&
+						button_toggle_cc_numbers[selected_button] != 0) {
+						snprintf(status_text, sizeof(status_text), "CC %u = 127",
+							(unsigned int)button_toggle_cc_numbers[selected_button]);
+					} else if (cc_send_enabled[slider_index] &&
+						selected_button ==
+							COLOR_BUTTON_START + 1) {
+						snprintf(status_text, sizeof(status_text),
+						"BAND1: NO TOGGLE CC");
+					} else {
+						snprintf(status_text, sizeof(status_text), "CC SEND %s",
+							cc_send_enabled[slider_index] ? "ON" : "OFF");
+					}
+					draw_status(grid_x, status_text);
+					draw_osc_view_button(view_button_x, view_button_y,
+						view_button_width, button_height,
+						osc2_view_enabled);
 				}
 			}
 			touch_latched = true;
@@ -337,10 +507,21 @@ int lcd_test(void)
 		}
 
 		draw_cc_slider(slider_x, slider_y, slider_width, slider_height,
-				selected_button >= 0 ? midi_slider_values[selected_button] : 0,
+				selected_button >= 0
+					? midi_slider_values[selected_button][0] : 0,
 				selected_button >= 0);
+		draw_cc_slider(second_slider_x, slider_y, slider_width, slider_height,
+				selected_button >= COLOR_BUTTON_START &&
+					selected_button < TOGGLE_BUTTON_START
+					? midi_slider_values[selected_button][1] : 0,
+				selected_button >= COLOR_BUTTON_START &&
+					selected_button < TOGGLE_BUTTON_START);
 		draw_cc_send_toggle(toggle_x, toggle_y, toggle_width, toggle_height,
-							cc_send_enabled, selected_button >= 0);
+							cc_send_enabled[0], selected_button >= 0);
+		draw_cc_send_toggle(second_toggle_x, toggle_y, toggle_width,
+			toggle_height, cc_send_enabled[1],
+			selected_button >= COLOR_BUTTON_START &&
+				selected_button < TOGGLE_BUTTON_START);
 
 		uint16_t adc_reading = adc_read();
 		draw_vu_meter(grid_x, sLCD_DIS.LCD_Dis_Page, adc_reading);
