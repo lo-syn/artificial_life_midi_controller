@@ -126,6 +126,25 @@ static void draw_button(POINT x, POINT y, POINT width, POINT height,
 					 selected ? BLACK : WHITE);
 }
 
+static void draw_grid_button(POINT grid_x, POINT grid_y, POINT button_width,
+							 POINT final_row_button_width, POINT button_height,
+							 uint8_t button_index, const char *label,
+							 bool selected)
+{
+	POINT row = button_index < COLOR_BUTTON_START
+		? button_index / BUTTON_COLUMNS
+		: BUTTON_ROWS - FOUR_BUTTON_ROWS +
+			(button_index - COLOR_BUTTON_START) / 4;
+	POINT column = button_index < COLOR_BUTTON_START
+		? button_index % BUTTON_COLUMNS
+		: (button_index - COLOR_BUTTON_START) % 4;
+	POINT current_button_width = button_index >= COLOR_BUTTON_START
+		? final_row_button_width : button_width;
+	POINT x = grid_x + column * (current_button_width + BUTTON_GAP);
+	POINT y = grid_y + row * (button_height + BUTTON_GAP);
+	draw_button(x, y, current_button_width, button_height, label, selected);
+}
+
 static void draw_osc_view_button(POINT x, POINT y, POINT width, POINT height,
 								 bool osc2_view_enabled)
 {
@@ -565,6 +584,8 @@ int lcd_test(void)
 							} else {
 								bool deselecting =
 									selected_button == (int8_t)button_index;
+								int8_t previous_selected_button =
+									selected_button;
 								if (selected_button >= 0 &&
 									button_toggle_cc_numbers[selected_button] != 0) {
 									send_control_change(
@@ -579,25 +600,22 @@ int lcd_test(void)
 										button_toggle_cc_numbers[button_index],
 										127);
 								}
-								for (uint8_t i = 0; i < BUTTON_COUNT; i++) {
-									POINT button_row = i < COLOR_BUTTON_START
-										? i / BUTTON_COLUMNS
-										: BUTTON_ROWS - FOUR_BUTTON_ROWS +
-											(i - COLOR_BUTTON_START) / 4;
-									POINT button_column = i < COLOR_BUTTON_START
-										? i % BUTTON_COLUMNS
-										: (i - COLOR_BUTTON_START) % 4;
-									POINT button_width_for_row =
-										i >= COLOR_BUTTON_START
-										? final_row_button_width : button_width;
-									POINT x = grid_x + button_column *
-										(button_width_for_row + BUTTON_GAP);
-									POINT y = grid_y + button_row *
-										(button_height + BUTTON_GAP);
-									draw_button(x, y, button_width_for_row,
-										button_height, button_labels[i],
-										button_toggle_states[i] ||
-										(!deselecting && i == button_index));
+								if (previous_selected_button >= 0) {
+									draw_grid_button(grid_x, grid_y,
+										button_width, final_row_button_width,
+										button_height,
+										(uint8_t)previous_selected_button,
+										button_labels[previous_selected_button],
+										button_toggle_states[
+											previous_selected_button]);
+								}
+								if (!deselecting) {
+									draw_grid_button(grid_x, grid_y,
+										button_width, final_row_button_width,
+										button_height,
+										(uint8_t)button_index,
+										button_labels[button_index],
+										true);
 								}
 								if (deselecting) {
 									draw_status(grid_x, "DESELECTED");
