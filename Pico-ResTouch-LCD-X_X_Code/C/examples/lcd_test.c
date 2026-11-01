@@ -338,6 +338,11 @@ int lcd_test(void)
 	bool cc_send_enabled[2] = { false, false };
 	uint8_t last_audio_cc_values[BUTTON_COUNT];
 	memset(last_audio_cc_values, UINT8_MAX, sizeof(last_audio_cc_values));
+	int8_t displayed_audio_button = -1;
+	bool displayed_audio_enabled = false;
+	bool displayed_audio_scale_visible = false;
+	uint8_t displayed_audio_scale = UINT8_MAX;
+	bool second_slider_was_visible = false;
 
 	for (uint8_t i = 0; i < BUTTON_COUNT; i++) {
 		POINT row = i < COLOR_BUTTON_START
@@ -539,9 +544,6 @@ int lcd_test(void)
 							button_cc_numbers[selected_button], value);
 						last_audio_cc_values[selected_button] = value;
 					}
-					draw_cc_slider(audio_scale_slider_x, audio_scale_slider_y,
-						slider_width, audio_scale_slider_height,
-						audio_scale_values[selected_button], true);
 					char status_text[32];
 					snprintf(status_text, sizeof(status_text),
 						"ADC SCALE %u",
@@ -627,9 +629,6 @@ int lcd_test(void)
 							button_cc_numbers[selected_button], value);
 						last_audio_cc_values[selected_button] = value;
 					}
-					draw_audio_control_button(audio_button_x, audio_button_y,
-						audio_button_width, audio_button_height,
-						audio_control_enabled[selected_button], true);
 					draw_status(grid_x, audio_control_enabled[selected_button]
 						? "AUDIO CONTROL ON" : "AUDIO CONTROL OFF");
 					draw_osc_view_button(view_button_x, view_button_y,
@@ -714,24 +713,58 @@ int lcd_test(void)
 				selected_button >= 0
 					? midi_slider_values[selected_button][0] : 0,
 				selected_button >= 0);
-		draw_cc_slider(second_slider_x, slider_y, slider_width, slider_height,
-				selected_button >= COLOR_BUTTON_START &&
-					selected_button < TOGGLE_BUTTON_START
-					? midi_slider_values[selected_button][1] : 0,
-				selected_button >= COLOR_BUTTON_START &&
-					selected_button < TOGGLE_BUTTON_START);
-		draw_audio_control_button(audio_button_x, audio_button_y,
-			audio_button_width, audio_button_height,
-			selected_button >= 0
-				? audio_control_enabled[selected_button] : false,
-			selected_button >= 0 &&
-				has_audio_control((uint8_t)selected_button));
 		if (selected_button >= 0 &&
 			has_audio_control((uint8_t)selected_button)) {
-			draw_cc_slider(audio_scale_slider_x, audio_scale_slider_y,
-				slider_width, audio_scale_slider_height,
-				audio_scale_values[selected_button],
-				audio_control_enabled[selected_button]);
+			if (second_slider_was_visible) {
+				draw_cc_slider(second_slider_x, slider_y, slider_width,
+					slider_height, 0, false);
+			}
+			bool audio_enabled = audio_control_enabled[selected_button];
+			if (displayed_audio_button != selected_button ||
+				displayed_audio_enabled != audio_enabled) {
+				draw_audio_control_button(audio_button_x, audio_button_y,
+					audio_button_width, audio_button_height,
+					audio_enabled, true);
+			}
+			if (audio_enabled &&
+				(!displayed_audio_scale_visible ||
+				 displayed_audio_button != selected_button ||
+				 displayed_audio_scale != audio_scale_values[selected_button])) {
+				draw_cc_slider(audio_scale_slider_x, audio_scale_slider_y,
+					slider_width, audio_scale_slider_height,
+					audio_scale_values[selected_button], true);
+			} else if (!audio_enabled && displayed_audio_scale_visible) {
+				draw_cc_slider(audio_scale_slider_x, audio_scale_slider_y,
+					slider_width, audio_scale_slider_height, 0, false);
+			}
+			displayed_audio_button = selected_button;
+			displayed_audio_enabled = audio_enabled;
+			displayed_audio_scale_visible = audio_enabled;
+			displayed_audio_scale = audio_scale_values[selected_button];
+			second_slider_was_visible = false;
+		} else {
+			if (displayed_audio_button >= 0) {
+				draw_audio_control_button(audio_button_x, audio_button_y,
+					audio_button_width, audio_button_height, false, false);
+				draw_cc_slider(audio_scale_slider_x, audio_scale_slider_y,
+					slider_width, audio_scale_slider_height, 0, false);
+				displayed_audio_button = -1;
+				displayed_audio_enabled = false;
+				displayed_audio_scale_visible = false;
+				displayed_audio_scale = UINT8_MAX;
+			}
+			bool second_slider_visible =
+				selected_button >= COLOR_BUTTON_START &&
+				selected_button < TOGGLE_BUTTON_START;
+			if (second_slider_visible) {
+				draw_cc_slider(second_slider_x, slider_y, slider_width,
+					slider_height,
+					midi_slider_values[selected_button][1], true);
+			} else if (second_slider_was_visible) {
+				draw_cc_slider(second_slider_x, slider_y, slider_width,
+					slider_height, 0, false);
+			}
+			second_slider_was_visible = second_slider_visible;
 		}
 		draw_cc_send_toggle(toggle_x, toggle_y, toggle_width, toggle_height,
 							cc_send_enabled[0], selected_button >= 0);
