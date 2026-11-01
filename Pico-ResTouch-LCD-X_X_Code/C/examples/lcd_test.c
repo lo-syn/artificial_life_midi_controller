@@ -339,6 +339,8 @@ int lcd_test(void)
 	};
 	int8_t selected_button = -1;
 	uint8_t midi_slider_values[BUTTON_COUNT][2] = { { 0 } };
+	midi_slider_values[0][0] = 127;
+	midi_slider_values[9][0] = 127;
 	midi_slider_values[6][0] = 63;
 	midi_slider_values[7][0] = 63;
 	midi_slider_values[8][0] = 63;
@@ -456,6 +458,8 @@ int lcd_test(void)
 						send_control_change(OSC_VIEW_CC_NUMBER, 0);
 					}
 					memset(midi_slider_values, 0, sizeof(midi_slider_values));
+					midi_slider_values[0][0] = 127;
+					midi_slider_values[9][0] = 127;
 					midi_slider_values[6][0] = 63;
 					midi_slider_values[7][0] = 63;
 					midi_slider_values[8][0] = 63;
