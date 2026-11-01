@@ -602,8 +602,9 @@ int lcd_test(void)
 									selected_button == (int8_t)button_index;
 								int8_t previous_selected_button =
 									selected_button;
-								if (selected_button >= 0) {
-									if (cc_send_enabled[selected_button][0] &&
+								if (selected_button >= COLOR_BUTTON_START) {
+									if ((cc_send_enabled[selected_button][0] ||
+										 cc_send_enabled[selected_button][1]) &&
 										button_toggle_cc_numbers[selected_button] != 0) {
 										send_control_change(
 											button_toggle_cc_numbers[selected_button],
@@ -828,8 +829,7 @@ int lcd_test(void)
 						slider_index == 1 ? second_toggle_x : toggle_x;
 					cc_send_enabled[selected_button][slider_index] =
 						!cc_send_enabled[selected_button][slider_index];
-					if (slider_index == 0 &&
-						button_toggle_cc_numbers[selected_button] != 0) {
+					if (button_toggle_cc_numbers[selected_button] != 0) {
 						send_control_change(
 							button_toggle_cc_numbers[selected_button],
 							cc_send_enabled[selected_button][slider_index]
