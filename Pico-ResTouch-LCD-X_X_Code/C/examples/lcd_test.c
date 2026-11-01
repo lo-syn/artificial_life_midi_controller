@@ -40,14 +40,15 @@
 
 extern LCD_DIS sLCD_DIS;
 
-#define BUTTON_ROWS 8
+#define BUTTON_ROWS 9
 #define BUTTON_COLUMNS 3
+#define FOUR_BUTTON_ROWS 3
 #define OSC1_WAVE_BUTTON_START BUTTON_COLUMNS
 #define OSC1_WAVE_BUTTON_COUNT BUTTON_COLUMNS
 #define OSC2_WAVE_BUTTON_START (BUTTON_COLUMNS * 4)
 #define OSC2_WAVE_BUTTON_COUNT BUTTON_COLUMNS
-#define COLOR_BUTTON_START ((BUTTON_ROWS - 2) * BUTTON_COLUMNS)
-#define TOGGLE_BUTTON_START (COLOR_BUTTON_START + 4)
+#define COLOR_BUTTON_START ((BUTTON_ROWS - FOUR_BUTTON_ROWS) * BUTTON_COLUMNS)
+#define TOGGLE_BUTTON_START (COLOR_BUTTON_START + 8)
 #define BUTTON_COUNT (TOGGLE_BUTTON_START + 4)
 #define BUTTON_GAP 6
 #define BUTTON_MARGIN 8
@@ -285,15 +286,18 @@ int lcd_test(void)
 		"OSC2 SQR", "OSC2 SAW", "OSC2 M",
 		"OSC2 RATE", "OSC2 FREQ", "OSC2 RM",
 		"SAT", "BAND1", "BAND2", "BAND3",
+		"rM", "MrM", "IFB", "mIFB",
 		"OSC1 FB", "OSC2 FB", "M/DIST", "F/DIST"
 	};
 	const uint8_t button_cc_numbers[BUTTON_COUNT] = {
 		120, 121, 122, 0, 0, 0, 16, 17, 18, 123, 124, 125,
-		0, 0, 0, 19, 20, 21, 22, 22, 22, 22, 0, 0, 0, 0
+		0, 0, 0, 19, 20, 21, 22, 22, 22, 22, 23, 23, 23, 23,
+		0, 0, 0, 0
 	};
 	const uint8_t button_toggle_cc_numbers[BUTTON_COUNT] = {
 		0, 0, 0, 48, 64, 32, 0, 0, 0, 0, 0, 0,
-		51, 67, 35, 0, 0, 0, 70, 0, 38, 54, 43, 44, 60, 61
+		51, 67, 35, 0, 0, 0, 70, 0, 38, 54, 0, 39, 55, 71,
+		43, 44, 60, 61
 	};
 	int8_t selected_button = -1;
 	uint8_t midi_slider_values[BUTTON_COUNT][2] = { { 0 } };
@@ -347,7 +351,8 @@ int lcd_test(void)
 	for (uint8_t i = 0; i < BUTTON_COUNT; i++) {
 		POINT row = i < COLOR_BUTTON_START
 			? i / BUTTON_COLUMNS
-			: BUTTON_ROWS - 2 + (i - COLOR_BUTTON_START) / 4;
+			: BUTTON_ROWS - FOUR_BUTTON_ROWS +
+				(i - COLOR_BUTTON_START) / 4;
 		POINT column = i < COLOR_BUTTON_START
 			? i % BUTTON_COLUMNS : (i - COLOR_BUTTON_START) % 4;
 		POINT current_button_width = i >= COLOR_BUTTON_START
@@ -414,7 +419,8 @@ int lcd_test(void)
 					POINT row = local_y / (button_height + BUTTON_GAP);
 					if (row < BUTTON_ROWS &&
 						local_y % (button_height + BUTTON_GAP) < button_height) {
-						bool is_four_button_row = row >= BUTTON_ROWS - 2;
+						bool is_four_button_row =
+							row >= BUTTON_ROWS - FOUR_BUTTON_ROWS;
 						POINT current_button_width = is_four_button_row
 							? final_row_button_width : button_width;
 						POINT row_columns = is_four_button_row
@@ -426,7 +432,8 @@ int lcd_test(void)
 								current_button_width) {
 							POINT button_index = is_four_button_row
 								? COLOR_BUTTON_START +
-									(row - (BUTTON_ROWS - 2)) * 4 + column
+									(row - (BUTTON_ROWS -
+										FOUR_BUTTON_ROWS)) * 4 + column
 								: row * BUTTON_COLUMNS + column;
 							bool is_toggle_button =
 								(button_index >= OSC1_WAVE_BUTTON_START &&
@@ -483,7 +490,7 @@ int lcd_test(void)
 								for (uint8_t i = 0; i < BUTTON_COUNT; i++) {
 									POINT button_row = i < COLOR_BUTTON_START
 										? i / BUTTON_COLUMNS
-										: BUTTON_ROWS - 2 +
+										: BUTTON_ROWS - FOUR_BUTTON_ROWS +
 											(i - COLOR_BUTTON_START) / 4;
 									POINT button_column = i < COLOR_BUTTON_START
 										? i % BUTTON_COLUMNS
@@ -567,7 +574,11 @@ int lcd_test(void)
 					uint8_t slider_cc_number =
 						selected_button >= COLOR_BUTTON_START &&
 						selected_button < TOGGLE_BUTTON_START
-						? (slider_index == 0 ? 22 : 126)
+						? (slider_index == 0
+							? (selected_button < COLOR_BUTTON_START + 4
+								? 22 : 23)
+							: (selected_button < COLOR_BUTTON_START + 4
+								? 126 : 127))
 						: button_cc_numbers[selected_button];
 					POINT active_slider_x =
 						slider_index == 1 ? second_slider_x : slider_x;
@@ -650,7 +661,11 @@ int lcd_test(void)
 					uint8_t slider_cc_number =
 						selected_button >= COLOR_BUTTON_START &&
 						selected_button < TOGGLE_BUTTON_START
-						? (slider_index == 0 ? 22 : 126)
+						? (slider_index == 0
+							? (selected_button < COLOR_BUTTON_START + 4
+								? 22 : 23)
+							: (selected_button < COLOR_BUTTON_START + 4
+								? 126 : 127))
 						: button_cc_numbers[selected_button];
 					POINT active_toggle_x =
 						slider_index == 1 ? second_toggle_x : toggle_x;
