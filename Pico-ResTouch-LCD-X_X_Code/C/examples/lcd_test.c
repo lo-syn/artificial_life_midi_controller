@@ -627,6 +627,31 @@ int lcd_test(void)
 									OSC2_WAVE_BUTTON_COUNT) ||
 								button_index >= TOGGLE_BUTTON_START;
 							if (is_toggle_button) {
+								bool is_square_or_saw =
+									(button_index >= OSC1_WAVE_BUTTON_START &&
+									 button_index < OSC1_WAVE_BUTTON_START + 2) ||
+									(button_index >= OSC2_WAVE_BUTTON_START &&
+									 button_index < OSC2_WAVE_BUTTON_START + 2);
+								if (is_square_or_saw &&
+									!button_toggle_states[button_index]) {
+									uint8_t other_button_index =
+										button_index % BUTTON_COLUMNS == 0
+										? button_index + 1
+										: button_index - 1;
+									if (button_toggle_states[other_button_index]) {
+										button_toggle_states[other_button_index] =
+											false;
+										send_control_change(
+											button_toggle_cc_numbers[
+												other_button_index], 0);
+										draw_grid_button(grid_x, grid_y,
+											button_width,
+											final_row_button_width,
+											button_height, other_button_index,
+											button_labels[other_button_index],
+											false, false, false);
+									}
+								}
 								button_toggle_states[button_index] =
 									!button_toggle_states[button_index];
 								send_control_change(
