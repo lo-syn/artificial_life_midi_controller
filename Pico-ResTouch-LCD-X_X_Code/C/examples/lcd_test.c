@@ -610,6 +610,7 @@ int lcd_test(void)
 											0);
 									}
 									cc_send_enabled[selected_button][0] = false;
+									cc_send_enabled[selected_button][1] = false;
 								}
 								selected_button = deselecting
 									? -1 : (int8_t)button_index;
