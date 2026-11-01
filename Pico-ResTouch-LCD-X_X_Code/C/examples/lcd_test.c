@@ -485,7 +485,7 @@ int lcd_test(void)
 						draw_button(x, y, current_button_width, button_height,
 							button_labels[i], false);
 					}
-					draw_status(grid_x, "RESET DEFAULTS");
+					draw_status(grid_x, "RESET");
 					draw_osc_view_button(view_button_x, view_button_y,
 						view_button_width, button_height, false);
 					draw_reset_button(reset_button_x, reset_button_y,
@@ -600,7 +600,7 @@ int lcd_test(void)
 										(!deselecting && i == button_index));
 								}
 								if (deselecting) {
-									draw_status(grid_x, "BUTTON DESELECTED");
+									draw_status(grid_x, "DESELECTED");
 								} else {
 									char status_text[32];
 									snprintf(status_text, sizeof(status_text),
@@ -857,9 +857,10 @@ int lcd_test(void)
 			has_audio_control((uint8_t)selected_button)) {
 			bool dual_audio = has_dual_slider_audio(
 				(uint8_t)selected_button);
-			if (displayed_audio_button >= 0 &&
+			bool audio_layout_changed = displayed_audio_button >= 0 &&
 				has_dual_slider_audio((uint8_t)displayed_audio_button) !=
-					dual_audio) {
+					dual_audio;
+			if (audio_layout_changed) {
 				if (has_dual_slider_audio((uint8_t)displayed_audio_button)) {
 					draw_cc_slider(second_slider_x, slider_y, slider_width,
 						slider_height, 0, false);
@@ -917,9 +918,14 @@ int lcd_test(void)
 				}
 				second_slider_was_visible = true;
 			} else {
+				if (second_slider_was_visible) {
+					draw_cc_slider(second_slider_x, slider_y,
+						slider_width, slider_height, 0, false);
+				}
 				bool audio_enabled =
 					audio_control_enabled[selected_button][0];
-				if (displayed_audio_button != selected_button ||
+				if (audio_layout_changed ||
+					displayed_audio_button != selected_button ||
 					displayed_audio_enabled[0] != audio_enabled) {
 					draw_audio_control_button(audio_button_x, audio_button_y,
 						audio_button_width, audio_button_height,
@@ -944,10 +950,6 @@ int lcd_test(void)
 				displayed_audio_scale_visible[0] = audio_enabled;
 				displayed_audio_scale[0] =
 					audio_scale_values[selected_button][0];
-				if (second_slider_was_visible) {
-					draw_cc_slider(second_slider_x, slider_y,
-						slider_width, slider_height, 0, false);
-				}
 				second_slider_was_visible = false;
 			}
 			displayed_audio_button = selected_button;
