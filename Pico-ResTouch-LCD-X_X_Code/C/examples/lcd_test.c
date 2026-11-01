@@ -113,6 +113,12 @@ static uint8_t get_slider_cc_number(uint8_t button_index,
 	return button_cc_numbers[button_index];
 }
 
+static bool is_three_column_slider_button(uint8_t button_index)
+{
+	return button_index < COLOR_BUTTON_START &&
+		has_audio_control(button_index);
+}
+
 static void draw_button(POINT x, POINT y, POINT width, POINT height,
 						const char *label, bool selected)
 {
@@ -132,7 +138,8 @@ static void draw_button(POINT x, POINT y, POINT width, POINT height,
 static void draw_grid_button(POINT grid_x, POINT grid_y, POINT button_width,
 							 POINT final_row_button_width, POINT button_height,
 							 uint8_t button_index, const char *label,
-							 bool selected)
+							 bool selected, bool send_enabled,
+							 bool audio_enabled)
 {
 	POINT row = button_index < COLOR_BUTTON_START
 		? button_index / BUTTON_COLUMNS
@@ -146,6 +153,13 @@ static void draw_grid_button(POINT grid_x, POINT grid_y, POINT button_width,
 	POINT x = grid_x + column * (current_button_width + BUTTON_GAP);
 	POINT y = grid_y + row * (button_height + BUTTON_GAP);
 	draw_button(x, y, current_button_width, button_height, label, selected);
+	if (is_three_column_slider_button(button_index) &&
+		!selected && send_enabled && audio_enabled) {
+		POINT text_width = Font12.Width * strlen(label);
+		GUI_DisString_EN(x + (current_button_width - text_width) / 2,
+			y + (button_height - Font12.Height) / 2,
+			label, &Font12, WHITE, GREEN);
+	}
 }
 
 static void draw_osc_view_button(POINT x, POINT y, POINT width, POINT height,
@@ -435,8 +449,8 @@ int lcd_test(void)
 			? final_row_button_width : button_width;
 		POINT x = grid_x + column * (current_button_width + BUTTON_GAP);
 		POINT y = grid_y + row * (button_height + BUTTON_GAP);
-		draw_button(x, y, current_button_width, button_height, button_labels[i],
-					button_toggle_states[i]);
+		draw_button(x, y, current_button_width, button_height,
+			button_labels[i], button_toggle_states[i]);
 	}
 	draw_osc_view_button(view_button_x, view_button_y, view_button_width,
 		button_height, false);
@@ -681,7 +695,11 @@ int lcd_test(void)
 										button_toggle_states[
 											previous_selected_button] ||
 											previous_selected_button ==
-												selected_four_button);
+												selected_four_button,
+										cc_send_enabled[
+												previous_selected_button][0],
+										audio_control_enabled[
+												previous_selected_button][0]);
 								}
 								if (previous_four_button >=
 										COLOR_BUTTON_START &&
@@ -693,7 +711,11 @@ int lcd_test(void)
 										(uint8_t)previous_four_button,
 										button_labels[previous_four_button],
 										button_toggle_states[
-											previous_four_button]);
+											previous_four_button],
+										cc_send_enabled[
+											previous_four_button][0],
+										audio_control_enabled[
+											previous_four_button][0]);
 								}
 								if (!deselecting) {
 									draw_grid_button(grid_x, grid_y,
@@ -701,7 +723,9 @@ int lcd_test(void)
 										button_height,
 										(uint8_t)button_index,
 										button_labels[button_index],
-										true);
+										true,
+										cc_send_enabled[button_index][0],
+										audio_control_enabled[button_index][0]);
 								}
 								if (deselecting) {
 									draw_status(grid_x, "DESELECTED");
