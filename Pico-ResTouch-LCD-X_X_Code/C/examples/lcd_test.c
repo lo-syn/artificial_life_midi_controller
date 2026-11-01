@@ -135,11 +135,34 @@ static void draw_button(POINT x, POINT y, POINT width, POINT height,
 					 selected ? BLACK : WHITE);
 }
 
+static void draw_indexed_matrix_button(POINT x, POINT y, POINT width,
+									   POINT height, uint8_t button_index,
+									   const char *label, bool selected,
+									   bool send_enabled, bool audio_enabled,
+									   bool res_labels)
+{
+	char numbered_label[8];
+	if (res_labels) {
+		snprintf(numbered_label, sizeof(numbered_label), "RES%u",
+			(unsigned int)button_index + 2u);
+		label = numbered_label;
+	}
+
+	draw_button(x, y, width, height, label, selected);
+	if (!res_labels && is_three_column_slider_button(button_index) &&
+		!selected && send_enabled && audio_enabled) {
+		POINT text_width = Font12.Width * strlen(label);
+		GUI_DisString_EN(x + (width - text_width) / 2,
+			y + (height - Font12.Height) / 2,
+			label, &Font12, WHITE, GREEN);
+	}
+}
+
 static void draw_grid_button(POINT grid_x, POINT grid_y, POINT button_width,
 							 POINT final_row_button_width, POINT button_height,
 							 uint8_t button_index, const char *label,
 							 bool selected, bool send_enabled,
-							 bool audio_enabled)
+							 bool audio_enabled, bool res_labels)
 {
 	POINT row = button_index < COLOR_BUTTON_START
 		? button_index / BUTTON_COLUMNS
@@ -152,22 +175,17 @@ static void draw_grid_button(POINT grid_x, POINT grid_y, POINT button_width,
 		? final_row_button_width : button_width;
 	POINT x = grid_x + column * (current_button_width + BUTTON_GAP);
 	POINT y = grid_y + row * (button_height + BUTTON_GAP);
-	draw_button(x, y, current_button_width, button_height, label, selected);
-	if (is_three_column_slider_button(button_index) &&
-		!selected && send_enabled && audio_enabled) {
-		POINT text_width = Font12.Width * strlen(label);
-		GUI_DisString_EN(x + (current_button_width - text_width) / 2,
-			y + (button_height - Font12.Height) / 2,
-			label, &Font12, WHITE, GREEN);
-	}
+	draw_indexed_matrix_button(x, y, current_button_width, button_height,
+		button_index, label, selected, send_enabled, audio_enabled, res_labels);
 }
 
 static void draw_osc_view_button(POINT x, POINT y, POINT width, POINT height,
-								 bool osc2_view_enabled)
+								 bool osc2_view_enabled, bool res_labels)
 {
 	draw_button(x, y, width, height,
-				osc2_view_enabled ? "OSC2 VIEW" : "OSC1 VIEW",
-				osc2_view_enabled);
+		res_labels ? "RES1" :
+			(osc2_view_enabled ? "OSC2 VIEW" : "OSC1 VIEW"),
+		!res_labels && osc2_view_enabled);
 }
 
 static void draw_reset_button(POINT x, POINT y, POINT width, POINT height,
@@ -450,11 +468,13 @@ int lcd_test(void)
 			? final_row_button_width : button_width;
 		POINT x = grid_x + column * (current_button_width + BUTTON_GAP);
 		POINT y = grid_y + row * (button_height + BUTTON_GAP);
-		draw_button(x, y, current_button_width, button_height,
-			button_labels[i], button_toggle_states[i]);
+		draw_indexed_matrix_button(x, y, current_button_width,
+			button_height, i, button_labels[i],
+			button_toggle_states[i], cc_send_enabled[i][0],
+			audio_control_enabled[i][0], al_button_label_index != 0);
 	}
 	draw_osc_view_button(view_button_x, view_button_y, view_button_width,
-		button_height, false);
+		button_height, false, al_button_label_index != 0);
 	draw_reset_button(reset_button_x, reset_button_y, reset_button_width,
 		button_height, false);
 	draw_cc_slider(slider_x, slider_y, slider_width, slider_height,
@@ -470,7 +490,7 @@ int lcd_test(void)
 
 	draw_status(grid_x, "ADC INPUT");
 	draw_osc_view_button(view_button_x, view_button_y, view_button_width,
-		button_height, osc2_view_enabled);
+		button_height, osc2_view_enabled, al_button_label_index != 0);
 	draw_reset_button(reset_button_x, reset_button_y, reset_button_width,
 		button_height, false);
 	draw_button(al_button_x, al_button_y, al_button_width,
@@ -564,13 +584,16 @@ int lcd_test(void)
 							(current_button_width + BUTTON_GAP);
 						POINT y = grid_y + button_row *
 							(button_height + BUTTON_GAP);
-						draw_button(x, y, current_button_width, button_height,
-							button_labels[i], false);
+						draw_indexed_matrix_button(x, y,
+							current_button_width, button_height, i,
+							button_labels[i], false, false, false,
+							al_button_label_index != 0);
 					}
 					send_control_change(RESET_CC_NUMBER, 127);
 					draw_status(grid_x, "RESET");
 					draw_osc_view_button(view_button_x, view_button_y,
-						view_button_width, button_height, false);
+						view_button_width, button_height, false,
+						al_button_label_index != 0);
 					draw_reset_button(reset_button_x, reset_button_y,
 						reset_button_width, button_height, true);
 					draw_button(al_button_x, al_button_y, al_button_width,
@@ -587,7 +610,7 @@ int lcd_test(void)
 						? "OSC 2 VIEW" : "OSC1 VIEW");
 					draw_osc_view_button(view_button_x, view_button_y,
 						view_button_width, button_height,
-						osc2_view_enabled);
+						osc2_view_enabled, al_button_label_index != 0);
 					draw_reset_button(reset_button_x, reset_button_y,
 						reset_button_width, button_height,
 						reset_button_pressed);
@@ -599,6 +622,20 @@ int lcd_test(void)
 						(uint8_t)((al_button_label_index + 1) %
 							(sizeof(al_button_labels) /
 							 sizeof(al_button_labels[0])));
+					for (uint8_t i = 0; i < BUTTON_COUNT; i++) {
+						draw_grid_button(grid_x, grid_y, button_width,
+							final_row_button_width, button_height, i,
+							button_labels[i],
+							button_toggle_states[i] ||
+								selected_button == (int8_t)i ||
+								selected_four_button == (int8_t)i,
+							cc_send_enabled[i][0],
+							audio_control_enabled[i][0],
+							al_button_label_index != 0);
+					}
+					draw_osc_view_button(view_button_x, view_button_y,
+						view_button_width, button_height, osc2_view_enabled,
+						al_button_label_index != 0);
 					draw_button(al_button_x, al_button_y, al_button_width,
 						al_button_height,
 						al_button_labels[al_button_label_index], false);
@@ -655,7 +692,8 @@ int lcd_test(void)
 											final_row_button_width,
 											button_height, other_button_index,
 											button_labels[other_button_index],
-											false, false, false);
+											false, false, false,
+											al_button_label_index != 0);
 									}
 								}
 								button_toggle_states[button_index] =
@@ -669,9 +707,13 @@ int lcd_test(void)
 									(current_button_width + BUTTON_GAP);
 								POINT y = grid_y + row *
 									(button_height + BUTTON_GAP);
-								draw_button(x, y, current_button_width,
-									button_height, button_labels[button_index],
-									button_toggle_states[button_index]);
+								draw_indexed_matrix_button(x, y,
+									current_button_width, button_height,
+									button_index, button_labels[button_index],
+									button_toggle_states[button_index],
+									cc_send_enabled[button_index][0],
+									audio_control_enabled[button_index][0],
+									al_button_label_index != 0);
 								char status_text[32];
 								snprintf(status_text, sizeof(status_text),
 									"CC %u = %u",
@@ -680,7 +722,8 @@ int lcd_test(void)
 								draw_status(grid_x, status_text);
 								draw_osc_view_button(view_button_x, view_button_y,
 									view_button_width, button_height,
-									osc2_view_enabled);
+									osc2_view_enabled,
+									al_button_label_index != 0);
 								draw_reset_button(reset_button_x, reset_button_y,
 									reset_button_width, button_height,
 									reset_button_pressed);
@@ -730,7 +773,8 @@ int lcd_test(void)
 										cc_send_enabled[
 												previous_selected_button][0],
 										audio_control_enabled[
-												previous_selected_button][0]);
+												previous_selected_button][0],
+										al_button_label_index != 0);
 								}
 								if (previous_four_button >=
 										COLOR_BUTTON_START &&
@@ -746,7 +790,8 @@ int lcd_test(void)
 										cc_send_enabled[
 											previous_four_button][0],
 										audio_control_enabled[
-											previous_four_button][0]);
+											previous_four_button][0],
+										al_button_label_index != 0);
 								}
 								if (!deselecting) {
 									draw_grid_button(grid_x, grid_y,
@@ -756,7 +801,8 @@ int lcd_test(void)
 										button_labels[button_index],
 										true,
 										cc_send_enabled[button_index][0],
-										audio_control_enabled[button_index][0]);
+										audio_control_enabled[button_index][0],
+										al_button_label_index != 0);
 								}
 								if (deselecting) {
 									draw_status(grid_x, "DESELECTED");
@@ -769,7 +815,8 @@ int lcd_test(void)
 								}
 								draw_osc_view_button(view_button_x, view_button_y,
 									view_button_width, button_height,
-									osc2_view_enabled);
+									osc2_view_enabled,
+									al_button_label_index != 0);
 								draw_reset_button(reset_button_x, reset_button_y,
 									reset_button_width, button_height,
 									reset_button_pressed);
@@ -818,7 +865,7 @@ int lcd_test(void)
 					draw_status(grid_x, status_text);
 					draw_osc_view_button(view_button_x, view_button_y,
 						view_button_width, button_height,
-						osc2_view_enabled);
+						osc2_view_enabled, al_button_label_index != 0);
 					draw_reset_button(reset_button_x, reset_button_y,
 						reset_button_width, button_height,
 						reset_button_pressed);
@@ -880,7 +927,7 @@ int lcd_test(void)
 					draw_status(grid_x, status_text);
 					draw_osc_view_button(view_button_x, view_button_y,
 						view_button_width, button_height,
-						osc2_view_enabled);
+						osc2_view_enabled, al_button_label_index != 0);
 					draw_reset_button(reset_button_x, reset_button_y,
 						reset_button_width, button_height,
 						reset_button_pressed);
@@ -937,7 +984,7 @@ int lcd_test(void)
 					draw_status(grid_x, status_text);
 					draw_osc_view_button(view_button_x, view_button_y,
 						view_button_width, button_height,
-						osc2_view_enabled);
+						osc2_view_enabled, al_button_label_index != 0);
 					draw_reset_button(reset_button_x, reset_button_y,
 						reset_button_width, button_height,
 						reset_button_pressed);
@@ -982,7 +1029,7 @@ int lcd_test(void)
 						? "A_CTRL ON" : "A_CTRL OFF");
 					draw_osc_view_button(view_button_x, view_button_y,
 						view_button_width, button_height,
-						osc2_view_enabled);
+						osc2_view_enabled, al_button_label_index != 0);
 					draw_reset_button(reset_button_x, reset_button_y,
 						reset_button_width, button_height,
 						reset_button_pressed);
@@ -1044,7 +1091,7 @@ int lcd_test(void)
 					draw_status(grid_x, status_text);
 					draw_osc_view_button(view_button_x, view_button_y,
 						view_button_width, button_height,
-						osc2_view_enabled);
+						osc2_view_enabled, al_button_label_index != 0);
 					draw_reset_button(reset_button_x, reset_button_y,
 						reset_button_width, button_height,
 						reset_button_pressed);
