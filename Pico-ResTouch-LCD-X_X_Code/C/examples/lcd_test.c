@@ -441,7 +441,6 @@ int lcd_test(void)
 					touch_y >= reset_button_y &&
 					touch_y <= reset_button_y + button_height) {
 					reset_button_pressed = true;
-					send_control_change(RESET_CC_NUMBER, 127);
 					if (selected_button >= 0 &&
 						button_toggle_cc_numbers[selected_button] != 0) {
 						send_control_change(
@@ -504,6 +503,7 @@ int lcd_test(void)
 						draw_button(x, y, current_button_width, button_height,
 							button_labels[i], false);
 					}
+					send_control_change(RESET_CC_NUMBER, 127);
 					draw_status(grid_x, "RESET");
 					draw_osc_view_button(view_button_x, view_button_y,
 						view_button_width, button_height, false);
@@ -859,7 +859,6 @@ int lcd_test(void)
 			touch_latched = true;
 		} else {
 			if (reset_button_pressed) {
-				send_control_change(RESET_CC_NUMBER, 0);
 				reset_button_pressed = false;
 				draw_reset_button(reset_button_x, reset_button_y,
 					reset_button_width, button_height, false);
