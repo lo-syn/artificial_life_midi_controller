@@ -753,14 +753,11 @@ int lcd_test(void)
 					((has_dual_slider_audio((uint8_t)selected_button) &&
 					  ((touch_x >= dual_audio_scale_x[0] &&
 						touch_x <= dual_audio_scale_x[0] +
-							slider_width &&
-						audio_control_enabled[selected_button][0]) ||
+							slider_width) ||
 					   (touch_x >= dual_audio_scale_x[1] &&
 						touch_x <= dual_audio_scale_x[1] +
-							slider_width &&
-						audio_control_enabled[selected_button][1]))) ||
+							slider_width))) ||
 					 (!has_dual_slider_audio((uint8_t)selected_button) &&
-					  audio_control_enabled[selected_button][0] &&
 					  touch_x >= audio_scale_slider_x &&
 					  touch_x <= audio_scale_slider_x +
 						slider_width))) {
@@ -1037,6 +1034,18 @@ int lcd_test(void)
 				selected_button >= 0
 					? midi_slider_values[selected_button][0] : 0,
 				selected_button >= 0);
+		bool right_send_toggle_overlaps_invert =
+			selected_button >= 0 &&
+			has_audio_control((uint8_t)selected_button) &&
+			!has_dual_slider_audio((uint8_t)selected_button);
+		if (!right_send_toggle_overlaps_invert) {
+			draw_cc_send_toggle(second_toggle_x, toggle_y, toggle_width,
+				toggle_height,
+				selected_button >= 0 &&
+					cc_send_enabled[selected_button][1],
+				selected_button >= COLOR_BUTTON_START &&
+					selected_button < TOGGLE_BUTTON_START);
+		}
 		if (selected_button >= 0 &&
 			has_audio_control((uint8_t)selected_button)) {
 			bool dual_audio = has_dual_slider_audio(
@@ -1069,6 +1078,10 @@ int lcd_test(void)
 					draw_audio_invert_button(audio_scale_slider_x,
 						audio_invert_button_y, slider_width,
 						audio_invert_button_height, false, false);
+				}
+				if (!dual_audio) {
+					draw_cc_send_toggle(second_toggle_x, toggle_y,
+						toggle_width, toggle_height, false, false);
 				}
 			}
 			if (dual_audio) {
@@ -1224,12 +1237,6 @@ int lcd_test(void)
 		draw_cc_send_toggle(toggle_x, toggle_y, toggle_width, toggle_height,
 			selected_button >= 0 &&
 				cc_send_enabled[selected_button][0], selected_button >= 0);
-		draw_cc_send_toggle(second_toggle_x, toggle_y, toggle_width,
-			toggle_height,
-			selected_button >= 0 &&
-				cc_send_enabled[selected_button][1],
-			selected_button >= COLOR_BUTTON_START &&
-				selected_button < TOGGLE_BUTTON_START);
 
 		for (uint8_t i = 0; i < BUTTON_COUNT; i++) {
 			if (has_audio_control(i)) {
