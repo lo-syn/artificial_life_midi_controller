@@ -388,6 +388,7 @@ int lcd_test(void)
 	bool audio_control_enabled[BUTTON_COUNT][2] = { { false } };
 	uint8_t audio_scale_values[BUTTON_COUNT][2] = { { 0 } };
 	bool cc_send_enabled[BUTTON_COUNT][2] = { { false } };
+	bool startup_toggle_reset_sent = false;
 	uint8_t last_audio_cc_values[BUTTON_COUNT][2];
 	memset(last_audio_cc_values, UINT8_MAX, sizeof(last_audio_cc_values));
 	int8_t displayed_audio_button = -1;
@@ -431,12 +432,24 @@ int lcd_test(void)
 	draw_reset_button(reset_button_x, reset_button_y, reset_button_width,
 		button_height, false);
 	bool touch_latched = false;
+	bool touch_ready = false;
 	bool reset_button_pressed = false;
 	POINT touch_x;
 	POINT touch_y;
 	while(1) {
 		uint16_t adc_reading = adc_read();
+		if (!startup_toggle_reset_sent && tud_mounted()) {
+			for (uint8_t i = 0; i < BUTTON_COUNT; i++) {
+				if (button_toggle_cc_numbers[i] != 0) {
+					send_control_change(button_toggle_cc_numbers[i], 0);
+				}
+			}
+			startup_toggle_reset_sent = true;
+		}
 		if (TP_GetTouchPoint(&touch_x, &touch_y)) {
+			if (!touch_ready) {
+				touch_latched = true;
+			}
 			if (!touch_latched) {
 				if (touch_x >= reset_button_x &&
 					touch_x <= reset_button_x + reset_button_width &&
@@ -589,20 +602,17 @@ int lcd_test(void)
 									selected_button == (int8_t)button_index;
 								int8_t previous_selected_button =
 									selected_button;
-								if (selected_button >= 0 &&
-									button_toggle_cc_numbers[selected_button] != 0) {
-									send_control_change(
-										button_toggle_cc_numbers[selected_button],
-										0);
+								if (selected_button >= 0) {
+									if (cc_send_enabled[selected_button][0] &&
+										button_toggle_cc_numbers[selected_button] != 0) {
+										send_control_change(
+											button_toggle_cc_numbers[selected_button],
+											0);
+									}
+									cc_send_enabled[selected_button][0] = false;
 								}
 								selected_button = deselecting
 									? -1 : (int8_t)button_index;
-								if (!deselecting &&
-									button_toggle_cc_numbers[button_index] != 0) {
-									send_control_change(
-										button_toggle_cc_numbers[button_index],
-										127);
-								}
 								if (previous_selected_button >= 0) {
 									draw_grid_button(grid_x, grid_y,
 										button_width, final_row_button_width,
@@ -817,6 +827,13 @@ int lcd_test(void)
 						slider_index == 1 ? second_toggle_x : toggle_x;
 					cc_send_enabled[selected_button][slider_index] =
 						!cc_send_enabled[selected_button][slider_index];
+					if (slider_index == 0 &&
+						button_toggle_cc_numbers[selected_button] != 0) {
+						send_control_change(
+							button_toggle_cc_numbers[selected_button],
+							cc_send_enabled[selected_button][slider_index]
+								? 127 : 0);
+					}
 					if (cc_send_enabled[selected_button][slider_index]) {
 						uint8_t value =
 							has_audio_control((uint8_t)selected_button) &&
@@ -842,11 +859,6 @@ int lcd_test(void)
 						button_toggle_cc_numbers[selected_button] != 0) {
 						snprintf(status_text, sizeof(status_text), "CC %u = 127",
 							(unsigned int)button_toggle_cc_numbers[selected_button]);
-					} else if (cc_send_enabled[selected_button][slider_index] &&
-						selected_button ==
-							COLOR_BUTTON_START + 1) {
-						snprintf(status_text, sizeof(status_text),
-						"BAND1: NO TOGGLE CC");
 					} else {
 						snprintf(status_text, sizeof(status_text), "CC SEND %s",
 							cc_send_enabled[selected_button][slider_index]
@@ -863,6 +875,7 @@ int lcd_test(void)
 			}
 			touch_latched = true;
 		} else {
+			touch_ready = true;
 			if (reset_button_pressed) {
 				reset_button_pressed = false;
 				draw_reset_button(reset_button_x, reset_button_y,
