@@ -393,11 +393,12 @@ int lcd_test(void)
 	const POINT reset_button_width = view_button_width;
 	const POINT reset_button_x = view_button_x - reset_button_width - BUTTON_GAP;
 	const POINT reset_button_y = grid_y;
+	const char *al_button_labels[] = { "AL", "WP", "SM" };
 	const POINT al_button_width = Font12.Width * strlen("AL") + 8;
 	const POINT al_button_height = button_height;
 	const POINT al_button_x = 10;
 	const POINT al_button_y = 40;
-	bool al_button_enabled = false;
+	uint8_t al_button_label_index = 0;
 	bool osc2_view_enabled = false;
 	const POINT toggle_width = slider_width;
 	const POINT toggle_height = 26;
@@ -473,7 +474,7 @@ int lcd_test(void)
 	draw_reset_button(reset_button_x, reset_button_y, reset_button_width,
 		button_height, false);
 	draw_button(al_button_x, al_button_y, al_button_width,
-		al_button_height, "AL", al_button_enabled);
+		al_button_height, al_button_labels[al_button_label_index], false);
 	bool touch_latched = false;
 	bool touch_ready = false;
 	bool reset_button_pressed = false;
@@ -535,7 +536,7 @@ int lcd_test(void)
 					memset(cc_send_enabled, 0, sizeof(cc_send_enabled));
 					selected_button = -1;
 					selected_four_button = -1;
-					al_button_enabled = false;
+					al_button_label_index = 0;
 					if (osc2_view_enabled) {
 						osc2_view_enabled = false;
 					}
@@ -573,7 +574,8 @@ int lcd_test(void)
 					draw_reset_button(reset_button_x, reset_button_y,
 						reset_button_width, button_height, true);
 					draw_button(al_button_x, al_button_y, al_button_width,
-						al_button_height, "AL", al_button_enabled);
+						al_button_height,
+						al_button_labels[al_button_label_index], false);
 				} else if (touch_x >= view_button_x &&
 					touch_x <= view_button_x + view_button_width &&
 					touch_y >= view_button_y &&
@@ -593,9 +595,13 @@ int lcd_test(void)
 					touch_x <= al_button_x + al_button_width &&
 					touch_y >= al_button_y &&
 					touch_y <= al_button_y + al_button_height) {
-					al_button_enabled = !al_button_enabled;
+					al_button_label_index =
+						(uint8_t)((al_button_label_index + 1) %
+							(sizeof(al_button_labels) /
+							 sizeof(al_button_labels[0])));
 					draw_button(al_button_x, al_button_y, al_button_width,
-						al_button_height, "AL", al_button_enabled);
+						al_button_height,
+						al_button_labels[al_button_label_index], false);
 				} else if (touch_x >= grid_x && touch_y >= grid_y) {
 					POINT local_x = touch_x - grid_x;
 					POINT local_y = touch_y - grid_y;
