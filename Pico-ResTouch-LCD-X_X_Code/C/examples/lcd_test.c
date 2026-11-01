@@ -338,6 +338,7 @@ int lcd_test(void)
 		43, 44, 60, 61
 	};
 	int8_t selected_button = -1;
+	int8_t selected_four_button = -1;
 	uint8_t midi_slider_values[BUTTON_COUNT][2] = { { 0 } };
 	midi_slider_values[0][0] = 127;
 	midi_slider_values[9][0] = 127;
@@ -489,6 +490,7 @@ int lcd_test(void)
 						sizeof(last_audio_cc_values));
 					memset(cc_send_enabled, 0, sizeof(cc_send_enabled));
 					selected_button = -1;
+					selected_four_button = -1;
 					if (osc2_view_enabled) {
 						osc2_view_enabled = false;
 					}
@@ -602,16 +604,31 @@ int lcd_test(void)
 									selected_button == (int8_t)button_index;
 								int8_t previous_selected_button =
 									selected_button;
-								if (selected_button >= COLOR_BUTTON_START) {
-									if ((cc_send_enabled[selected_button][0] ||
-										 cc_send_enabled[selected_button][1]) &&
-										button_toggle_cc_numbers[selected_button] != 0) {
-										send_control_change(
-											button_toggle_cc_numbers[selected_button],
-											0);
+								int8_t previous_four_button =
+									selected_four_button;
+								if (button_index >= COLOR_BUTTON_START) {
+									if (selected_four_button >=
+											COLOR_BUTTON_START &&
+										selected_four_button !=
+											(int8_t)button_index) {
+										if ((cc_send_enabled[
+												selected_four_button][0] ||
+											 cc_send_enabled[
+												selected_four_button][1]) &&
+											button_toggle_cc_numbers[
+												selected_four_button] != 0) {
+											send_control_change(
+												button_toggle_cc_numbers[
+													selected_four_button],
+												0);
+										}
+										cc_send_enabled[selected_four_button][0] =
+											false;
+										cc_send_enabled[selected_four_button][1] =
+											false;
 									}
-									cc_send_enabled[selected_button][0] = false;
-									cc_send_enabled[selected_button][1] = false;
+									selected_four_button = deselecting
+										? -1 : (int8_t)button_index;
 								}
 								selected_button = deselecting
 									? -1 : (int8_t)button_index;
@@ -622,7 +639,21 @@ int lcd_test(void)
 										(uint8_t)previous_selected_button,
 										button_labels[previous_selected_button],
 										button_toggle_states[
-											previous_selected_button]);
+											previous_selected_button] ||
+											previous_selected_button ==
+												selected_four_button);
+								}
+								if (previous_four_button >=
+										COLOR_BUTTON_START &&
+									previous_four_button !=
+										selected_four_button) {
+									draw_grid_button(grid_x, grid_y,
+										button_width, final_row_button_width,
+										button_height,
+										(uint8_t)previous_four_button,
+										button_labels[previous_four_button],
+										button_toggle_states[
+											previous_four_button]);
 								}
 								if (!deselecting) {
 									draw_grid_button(grid_x, grid_y,
