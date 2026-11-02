@@ -123,6 +123,12 @@ static uint8_t get_audio_state_bank(uint8_t button_index,
 	return osc1_m_mode && has_osc1_m_slider(button_index) ? 1 : 0;
 }
 
+static bool is_osc1_wave_button(uint8_t button_index)
+{
+	return button_index >= OSC1_WAVE_BUTTON_START &&
+		button_index < OSC1_WAVE_BUTTON_START + 2;
+}
+
 static uint8_t get_slider_cc_number(uint8_t button_index,
 									uint8_t slider_index,
 									const uint8_t *button_cc_numbers)
@@ -509,6 +515,7 @@ int lcd_test(void)
 	osc1_m_slider_values[7][0] = 63;
 	osc1_m_slider_values[8][0] = 63;
 	bool button_toggle_states[BUTTON_COUNT] = { false };
+	bool osc1_m_wave_toggle_states[2] = { false, false };
 	const POINT left_meter_x = 12;
 	const POINT meter_end_x = left_meter_x + VU_BAR_WIDTH + 44;
 	const POINT slider_width = 24;
@@ -726,6 +733,8 @@ int lcd_test(void)
 					osc1_m_slider_values[8][0] = 63;
 					memset(button_toggle_states, 0,
 						sizeof(button_toggle_states));
+					memset(osc1_m_wave_toggle_states, 0,
+						sizeof(osc1_m_wave_toggle_states));
 					memset(audio_control_enabled, 0,
 						sizeof(audio_control_enabled));
 					memset(audio_control_inverted, 0,
@@ -897,20 +906,38 @@ int lcd_test(void)
 									OSC2_WAVE_BUTTON_COUNT) ||
 								button_index >= TOGGLE_BUTTON_START;
 							if (is_toggle_button) {
+								bool *toggle_state =
+									is_osc1_wave_button(
+										(uint8_t)button_index) &&
+									button_toggle_states[
+										OSC1_M_BUTTON_INDEX]
+									? &osc1_m_wave_toggle_states[
+										button_index -
+											OSC1_WAVE_BUTTON_START]
+									: &button_toggle_states[button_index];
 								bool is_square_or_saw =
 									(button_index >= OSC1_WAVE_BUTTON_START &&
 									 button_index < OSC1_WAVE_BUTTON_START + 2) ||
 									(button_index >= OSC2_WAVE_BUTTON_START &&
 									 button_index < OSC2_WAVE_BUTTON_START + 2);
 								if (is_square_or_saw &&
-									!button_toggle_states[button_index]) {
+									!*toggle_state) {
 									uint8_t other_button_index =
 										button_index % BUTTON_COLUMNS == 0
 										? button_index + 1
 										: button_index - 1;
-									if (button_toggle_states[other_button_index]) {
-										button_toggle_states[other_button_index] =
-											false;
+									bool *other_toggle_state =
+										is_osc1_wave_button(
+											other_button_index) &&
+										button_toggle_states[
+											OSC1_M_BUTTON_INDEX]
+										? &osc1_m_wave_toggle_states[
+											other_button_index -
+												OSC1_WAVE_BUTTON_START]
+										: &button_toggle_states[
+											other_button_index];
+									if (*other_toggle_state) {
+										*other_toggle_state = false;
 										send_control_change(
 											button_toggle_cc_numbers[
 												other_button_index], 0);
@@ -919,15 +946,35 @@ int lcd_test(void)
 											final_row_button_width,
 											button_height, other_button_index,
 											button_labels[other_button_index],
-											false, false, false);
+											false, true, false);
 									}
 								}
-								button_toggle_states[button_index] =
-									!button_toggle_states[button_index];
+								*toggle_state = !*toggle_state;
 								send_control_change(
 									button_toggle_cc_numbers[button_index],
-									button_toggle_states[button_index] ? 127 : 0);
+									*toggle_state ? 127 : 0);
 								if (button_index == OSC1_M_BUTTON_INDEX) {
+									for (uint8_t i = 0; i < 2; i++) {
+										uint8_t wave_button_index =
+											OSC1_WAVE_BUTTON_START + i;
+										bool wave_selected =
+											button_toggle_states[
+												OSC1_M_BUTTON_INDEX]
+											? osc1_m_wave_toggle_states[i]
+											: button_toggle_states[
+												wave_button_index];
+										send_control_change(
+											button_toggle_cc_numbers[
+												wave_button_index],
+											wave_selected ? 127 : 0);
+										draw_grid_button(grid_x, grid_y,
+											button_width,
+											final_row_button_width,
+											button_height,
+											wave_button_index,
+											button_labels[wave_button_index],
+											wave_selected, true, false);
+									}
 									for (uint8_t i = 0;
 										 i < OSC1_CONTROL_COUNT; i++) {
 										if (has_audio_control(i) &&
@@ -976,14 +1023,14 @@ int lcd_test(void)
 								draw_grid_button(grid_x, grid_y, button_width,
 									final_row_button_width, button_height,
 									button_index, button_labels[button_index],
-									button_toggle_states[button_index],
+									*toggle_state,
 									true,
 									AUDIO_CONTROL_ENABLED(button_index, 0));
 								char status_text[32];
 								snprintf(status_text, sizeof(status_text),
 									"CC %u = %u",
 									(unsigned int)button_toggle_cc_numbers[button_index],
-									button_toggle_states[button_index] ? 127u : 0u);
+									*toggle_state ? 127u : 0u);
 								draw_status(grid_x, status_text);
 								draw_osc_view_button(view_button_x, view_button_y,
 									view_button_width, button_height,
