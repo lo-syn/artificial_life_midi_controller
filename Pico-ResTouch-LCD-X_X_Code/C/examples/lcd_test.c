@@ -678,8 +678,6 @@ int lcd_test(void)
 					touch_y <= reset_button_y + button_height) {
 					reset_button_pressed = true;
 					int8_t reset_geom_option = selected_geom_option;
-					bool osc1_m_was_enabled =
-						button_toggle_states[OSC1_M_BUTTON_INDEX];
 					if (reset_geom_option >= 0 &&
 						reset_geom_option < GEOM_OPTION_COUNT &&
 						geom_option_toggle_cc_numbers[
@@ -687,14 +685,6 @@ int lcd_test(void)
 						pending_geom_reset_cc =
 							geom_option_toggle_cc_numbers[
 								reset_geom_option];
-					}
-					for (uint8_t i = 0; i < BUTTON_COUNT; i++) {
-						if (button_toggle_cc_numbers[i] != 0 &&
-							button_toggle_cc_numbers[i] != OSC1_M_CC_NUMBER &&
-							button_toggle_cc_numbers[i] != OSC2_M_CC_NUMBER) {
-							send_control_change(
-								button_toggle_cc_numbers[i], 0);
-						}
 					}
 					send_control_change(OSC1_M_CC_NUMBER, 127);
 					send_control_change(OSC1_M_CC_NUMBER, 0);
@@ -737,10 +727,6 @@ int lcd_test(void)
 						sizeof(button_toggle_states));
 					memset(osc1_m_wave_toggle_states, 0,
 						sizeof(osc1_m_wave_toggle_states));
-					button_toggle_states[
-						OSC1_WAVE_BUTTON_START] = false;
-					button_toggle_states[
-						OSC1_WAVE_BUTTON_START + 1] = false;
 					osc1_m_wave_toggle_states[0] = false;
 					osc1_m_wave_toggle_states[1] = false;
 					memset(audio_control_enabled, 0,
@@ -780,30 +766,12 @@ int lcd_test(void)
 							final_row_button_width, button_height, i,
 							button_labels[i], false, false, false);
 					}
+					send_control_change(OSC1_M_CC_NUMBER, 0);
 
 					send_control_change(RESET_CC_NUMBER, 127);
 					send_control_change(RESET_CC_NUMBER, 0);
-					send_control_change(
-						button_toggle_cc_numbers[
-							OSC1_WAVE_BUTTON_START], 0);
-					send_control_change(
-						button_toggle_cc_numbers[
-							OSC1_WAVE_BUTTON_START + 1], 0);
-					send_control_change(OSC1_M_CC_NUMBER,
-						osc1_m_was_enabled ? 0 : 127);
-					for (uint8_t i = 0; i < OSC1_CONTROL_COUNT; i++) {
-						if (button_cc_numbers[i] != 0) {
-							send_control_change(button_cc_numbers[i],
-								midi_slider_values[i][0]);
-						}
-					}
-					send_control_change(
-						button_toggle_cc_numbers[
-							OSC1_WAVE_BUTTON_START], 0);
-					send_control_change(
-						button_toggle_cc_numbers[
-							OSC1_WAVE_BUTTON_START + 1], 0);
-					send_control_change(OSC1_M_CC_NUMBER, 0);
+
+
 					draw_status(grid_x, "RESET");
 					draw_osc_view_button(view_button_x, view_button_y,
 						view_button_width, button_height, false);
