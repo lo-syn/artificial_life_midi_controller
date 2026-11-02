@@ -50,11 +50,15 @@ extern LCD_DIS sLCD_DIS;
 #define COLOR_BUTTON_START ((BUTTON_ROWS - FOUR_BUTTON_ROWS) * BUTTON_COLUMNS)
 #define TOGGLE_BUTTON_START (COLOR_BUTTON_START + 8)
 #define BUTTON_COUNT (TOGGLE_BUTTON_START + 4)
+#define GEOM_BUTTON_INDEX 1
+#define GEOM_OPTION_COUNT 4
 #define BUTTON_GAP 6
 #define BUTTON_MARGIN 8
 #define MIDI_CC_CHANNEL 0
 #define OSC_VIEW_CC_NUMBER 46
 #define RESET_CC_NUMBER 58
+#define OSC1_M_CC_NUMBER 32
+#define OSC2_M_CC_NUMBER 35
 #define VU_ADC_GPIO 26 /* Pico ADC0 input; keep the input between 0 and 3.3V. */
 #define VU_ADC_CHANNEL 0
 #define VU_ADC_MAX_MILLIVOLTS 3300u
@@ -114,6 +118,31 @@ static uint8_t get_slider_cc_number(uint8_t button_index,
 		return slider_index == 0 ? 23 : 127;
 	}
 	return button_cc_numbers[button_index];
+}
+
+static uint8_t get_slider_value(
+	uint8_t button_index, uint8_t slider_index, int8_t geom_option,
+	const uint8_t midi_slider_values[BUTTON_COUNT][2],
+	const uint8_t geom_slider_values[GEOM_OPTION_COUNT])
+{
+	if (button_index == GEOM_BUTTON_INDEX && slider_index == 0 &&
+		geom_option >= 0 && geom_option < GEOM_OPTION_COUNT) {
+		return geom_slider_values[geom_option];
+	}
+	return midi_slider_values[button_index][slider_index];
+}
+
+static void set_slider_value(
+	uint8_t button_index, uint8_t slider_index, int8_t geom_option,
+	uint8_t value, uint8_t midi_slider_values[BUTTON_COUNT][2],
+	uint8_t geom_slider_values[GEOM_OPTION_COUNT])
+{
+	if (button_index == GEOM_BUTTON_INDEX && slider_index == 0 &&
+		geom_option >= 0 && geom_option < GEOM_OPTION_COUNT) {
+		geom_slider_values[geom_option] = value;
+		return;
+	}
+	midi_slider_values[button_index][slider_index] = value;
 }
 
 static bool is_three_column_slider_button(uint8_t button_index)
@@ -180,6 +209,33 @@ static void draw_grid_button(POINT grid_x, POINT grid_y, POINT button_width,
 	POINT y = grid_y + row * (button_height + BUTTON_GAP);
 	draw_indexed_matrix_button(x, y, current_button_width, button_height,
 		button_index, label, selected, send_enabled, audio_enabled);
+}
+
+static void draw_geom_option_buttons(POINT grid_x, POINT grid_y,
+									 POINT button_width, POINT button_gap,
+									 POINT button_height,
+									 const char *const *labels,
+									 int8_t selected_option, bool visible)
+{
+	const POINT x_origin = grid_x -
+		GEOM_OPTION_COUNT * (button_width + button_gap);
+	const POINT y = grid_y +
+		(BUTTON_ROWS - 1) * (button_height + button_gap);
+	const POINT group_width =
+		GEOM_OPTION_COUNT * button_width +
+		(GEOM_OPTION_COUNT - 1) * button_gap;
+	if (!visible) {
+		GUI_DrawRectangle(x_origin - 2, y - 2,
+			x_origin + group_width + 2, y + button_height + 2,
+			BLACK, DRAW_FULL, DOT_PIXEL_1X1);
+		return;
+	}
+
+	for (uint8_t i = 0; i < GEOM_OPTION_COUNT; i++) {
+		POINT x = x_origin + i * (button_width + button_gap);
+		draw_button(x, y, button_width, button_height, labels[i],
+			selected_option == (int8_t)i);
+	}
 }
 
 static void draw_osc_view_button(POINT x, POINT y, POINT width, POINT height,
@@ -352,29 +408,42 @@ int lcd_test(void)
 	const POINT meter_top = grid_y + button_height + BUTTON_GAP;
 	draw_vu_meter_frame(grid_x, sLCD_DIS.LCD_Dis_Page, meter_top);
 	const char *button_labels[BUTTON_COUNT] = {
-		"OSC1 AMP", "OSC1 MOVE", "OSC1 PM",
+		"OSC1 AMP", "OSC1 GEOM", "OSC1 PM",
 		"OSC1 SQR", "OSC1 SAW", "OSC1 M",
 		"OSC1 RATE", "OSC1 FREQ", "OSC1 RM",
-		"OSC2 AMP", "OSC2 MOVE", "OSC2 PM",
+		"OSC2 AMP", "OSC2 GEOM", "OSC2 PM",
 		"OSC2 SQR", "OSC2 SAW", "OSC2 M",
 		"OSC2 RATE", "OSC2 FREQ", "OSC2 RM",
 		"SAT", "BAND1", "BAND2", "BAND3",
 		"rM", "MrM", "IFB", "mIFB",
 		"OSC1 FB", "OSC2 FB", "M/DIST", "F/DIST"
 	};
+	const char *geom_option_labels[GEOM_OPTION_COUNT] = {
+		"AXIS", "RAD", "ROT", "mROT"
+	};
+	const uint8_t geom_option_toggle_cc_numbers[GEOM_OPTION_COUNT] = {
+		0, 33, 49, 65
+	};
+	uint8_t geom_option_last_cc_values[GEOM_OPTION_COUNT] = { 0 };
+	uint8_t pending_geom_reset_cc = 0;
 	const uint8_t button_cc_numbers[BUTTON_COUNT] = {
 		120, 121, 122, 0, 0, 0, 16, 17, 18, 123, 124, 125,
 		0, 0, 0, 19, 20, 21, 22, 22, 22, 22, 23, 23, 23, 23,
 		0, 0, 0, 0
 	};
 	const uint8_t button_toggle_cc_numbers[BUTTON_COUNT] = {
-		0, 0, 0, 48, 64, 32, 0, 0, 0, 0, 0, 0,
-		51, 67, 35, 0, 0, 0, 70, 0, 38, 54, 0, 39, 55, 71,
+		0, 0, 0, 48, 64, OSC1_M_CC_NUMBER, 0, 0, 0, 0, 0, 0,
+		51, 67, OSC2_M_CC_NUMBER, 0, 0, 0, 70, 0, 38, 54, 0, 39, 55, 71,
 		43, 44, 60, 61
 	};
 	int8_t selected_button = -1;
 	int8_t selected_four_button = -1;
+	int8_t selected_geom_option = 0;
+	bool geom_options_enabled = false;
+	bool displayed_geom_menu = false;
+	int8_t displayed_geom_option = -1;
 	uint8_t midi_slider_values[BUTTON_COUNT][2] = { { 0 } };
+	uint8_t geom_slider_values[GEOM_OPTION_COUNT] = { 0, 0, 63, 63 };
 	midi_slider_values[0][0] = 127;
 	midi_slider_values[9][0] = 127;
 	midi_slider_values[6][0] = 63;
@@ -469,6 +538,12 @@ int lcd_test(void)
 					send_control_change(button_toggle_cc_numbers[i], 0);
 				}
 			}
+			for (uint8_t i = 0; i < GEOM_OPTION_COUNT; i++) {
+				if (geom_option_toggle_cc_numbers[i] != 0) {
+					send_control_change(geom_option_toggle_cc_numbers[i], 0);
+					geom_option_last_cc_values[i] = 0;
+				}
+			}
 			startup_toggle_reset_sent = true;
 		}
 		if (TP_GetTouchPoint(&touch_x, &touch_y)) {
@@ -509,21 +584,42 @@ int lcd_test(void)
 					touch_y >= reset_button_y &&
 					touch_y <= reset_button_y + button_height) {
 					reset_button_pressed = true;
-					if (selected_button >= 0 &&
-						button_toggle_cc_numbers[selected_button] != 0) {
-						send_control_change(
-							button_toggle_cc_numbers[selected_button], 0);
+					int8_t reset_geom_option = selected_geom_option;
+					if (reset_geom_option >= 0 &&
+						reset_geom_option < GEOM_OPTION_COUNT &&
+						geom_option_toggle_cc_numbers[
+							reset_geom_option] != 0) {
+						pending_geom_reset_cc =
+							geom_option_toggle_cc_numbers[
+								reset_geom_option];
 					}
 					for (uint8_t i = 0; i < BUTTON_COUNT; i++) {
-						if (button_toggle_cc_numbers[i] != 0) {
+						if (button_toggle_cc_numbers[i] != 0 &&
+							button_toggle_cc_numbers[i] != OSC1_M_CC_NUMBER &&
+							button_toggle_cc_numbers[i] != OSC2_M_CC_NUMBER) {
 							send_control_change(
 								button_toggle_cc_numbers[i], 0);
 						}
 					}
+					send_control_change(OSC1_M_CC_NUMBER, 127);
+					send_control_change(OSC1_M_CC_NUMBER, 0);
+					send_control_change(OSC2_M_CC_NUMBER, 0);
+					for (uint8_t i = 0; i < GEOM_OPTION_COUNT; i++) {
+						if (geom_option_toggle_cc_numbers[i] != 0) {
+							send_control_change(
+								geom_option_toggle_cc_numbers[i], 0);
+							geom_option_last_cc_values[i] = 0;
+						}
+					}
+					selected_geom_option = 0;
 					if (osc2_view_enabled) {
 						send_control_change(OSC_VIEW_CC_NUMBER, 0);
 					}
 					memset(midi_slider_values, 0, sizeof(midi_slider_values));
+					geom_slider_values[0] = 0;
+					geom_slider_values[1] = 0;
+					geom_slider_values[2] = 63;
+					geom_slider_values[3] = 63;
 					midi_slider_values[0][0] = 127;
 					midi_slider_values[9][0] = 127;
 					midi_slider_values[6][0] = 63;
@@ -544,6 +640,7 @@ int lcd_test(void)
 						sizeof(last_audio_cc_values));
 					selected_button = -1;
 					selected_four_button = -1;
+					geom_options_enabled = false;
 					if (osc2_view_enabled) {
 						osc2_view_enabled = false;
 					}
@@ -562,7 +659,9 @@ int lcd_test(void)
 							final_row_button_width, button_height, i,
 							button_labels[i], false, false, false);
 					}
+
 					send_control_change(RESET_CC_NUMBER, 127);
+					send_control_change(RESET_CC_NUMBER, 0);
 					draw_status(grid_x, "RESET");
 					draw_osc_view_button(view_button_x, view_button_y,
 						view_button_width, button_height, false);
@@ -583,6 +682,66 @@ int lcd_test(void)
 					draw_reset_button(reset_button_x, reset_button_y,
 						reset_button_width, button_height,
 						reset_button_pressed);
+				} else if (geom_options_enabled &&
+					touch_y >= grid_y +
+						(BUTTON_ROWS - 1) * (button_height + BUTTON_GAP) &&
+					touch_y < grid_y +
+						(BUTTON_ROWS - 1) * (button_height + BUTTON_GAP) +
+							button_height &&
+					touch_x >= grid_x -
+						GEOM_OPTION_COUNT *
+							(final_row_button_width + BUTTON_GAP) &&
+					touch_x < grid_x) {
+					POINT geom_options_x = grid_x -
+						GEOM_OPTION_COUNT *
+							(final_row_button_width + BUTTON_GAP);
+					POINT geom_option_column = (touch_x - geom_options_x) /
+						(final_row_button_width + BUTTON_GAP);
+					if (geom_option_column < GEOM_OPTION_COUNT &&
+						(touch_x - geom_options_x) %
+							(final_row_button_width + BUTTON_GAP) <
+							final_row_button_width) {
+						int8_t previous_geom_option =
+							selected_geom_option;
+						selected_geom_option = (int8_t)geom_option_column;
+						if (previous_geom_option != selected_geom_option &&
+							previous_geom_option >= 0 &&
+							geom_option_toggle_cc_numbers[
+								previous_geom_option] != 0) {
+							send_control_change(
+								geom_option_toggle_cc_numbers[
+									previous_geom_option], 0);
+							geom_option_last_cc_values[
+								previous_geom_option] = 0;
+						}
+						if (previous_geom_option != selected_geom_option &&
+							geom_option_toggle_cc_numbers[
+								selected_geom_option] != 0) {
+							send_control_change(
+								geom_option_toggle_cc_numbers[
+									selected_geom_option], 127);
+							geom_option_last_cc_values[
+								selected_geom_option] = 127;
+						}
+						if (previous_geom_option != selected_geom_option) {
+							uint8_t value = get_slider_value(
+								GEOM_BUTTON_INDEX, 0,
+								selected_geom_option, midi_slider_values,
+								geom_slider_values);
+							if (audio_control_enabled[
+									GEOM_BUTTON_INDEX][0]) {
+								value = apply_adc_offset(value, adc_reading,
+									audio_scale_values[
+										GEOM_BUTTON_INDEX][0],
+									audio_control_inverted[
+										GEOM_BUTTON_INDEX][0]);
+								last_audio_cc_values[
+									GEOM_BUTTON_INDEX][0] = value;
+							}
+							send_control_change(
+								button_cc_numbers[GEOM_BUTTON_INDEX], value);
+						}
+					}
 				} else if (touch_y >= grid_y &&
 					(touch_x >= grid_x ||
 					 (touch_y >= grid_y +
@@ -709,6 +868,36 @@ int lcd_test(void)
 								}
 								selected_button = deselecting
 									? -1 : (int8_t)button_index;
+								geom_options_enabled =
+									button_index == GEOM_BUTTON_INDEX &&
+									!deselecting;
+								if (button_index == GEOM_BUTTON_INDEX &&
+									!deselecting) {
+									if (pending_geom_reset_cc != 0) {
+										send_control_change(
+											pending_geom_reset_cc, 0);
+										pending_geom_reset_cc = 0;
+									}
+									uint8_t value = get_slider_value(
+										GEOM_BUTTON_INDEX, 0,
+										selected_geom_option,
+										midi_slider_values,
+										geom_slider_values);
+									if (audio_control_enabled[
+											GEOM_BUTTON_INDEX][0]) {
+										value = apply_adc_offset(value,
+											adc_reading,
+											audio_scale_values[
+												GEOM_BUTTON_INDEX][0],
+											audio_control_inverted[
+												GEOM_BUTTON_INDEX][0]);
+										last_audio_cc_values[
+											GEOM_BUTTON_INDEX][0] = value;
+									}
+									send_control_change(
+										button_cc_numbers[
+											GEOM_BUTTON_INDEX], value);
+								}
 								if (previous_selected_button >= 0) {
 									draw_grid_button(grid_x, grid_y,
 										button_width, final_row_button_width,
@@ -788,7 +977,10 @@ int lcd_test(void)
 					audio_control_inverted[selected_button][slider_index] =
 						!audio_control_inverted[selected_button][slider_index];
 					uint8_t value = apply_adc_offset(
-						midi_slider_values[selected_button][slider_index],
+						get_slider_value(
+							(uint8_t)selected_button, slider_index,
+							selected_geom_option, midi_slider_values,
+							geom_slider_values),
 						adc_reading,
 						audio_scale_values[selected_button][slider_index],
 						audio_control_inverted[selected_button][slider_index]);
@@ -852,7 +1044,10 @@ int lcd_test(void)
 							previous_scale_value;
 					if (scale_value_changed) {
 						uint8_t value = apply_adc_offset(
-							midi_slider_values[selected_button][slider_index],
+							get_slider_value(
+								(uint8_t)selected_button, slider_index,
+								selected_geom_option, midi_slider_values,
+								geom_slider_values),
 							adc_reading,
 							audio_scale_values[selected_button][slider_index],
 							audio_control_inverted[selected_button][slider_index]);
@@ -892,23 +1087,27 @@ int lcd_test(void)
 					if (relative > adjusted_range) {
 						relative = adjusted_range;
 					}
-					uint8_t previous_slider_value =
-						midi_slider_values[selected_button][slider_index];
-					midi_slider_values[selected_button][slider_index] = (uint8_t)(127u -
+					uint8_t previous_slider_value = get_slider_value(
+						(uint8_t)selected_button, slider_index,
+						selected_geom_option, midi_slider_values,
+						geom_slider_values);
+					uint8_t slider_value = (uint8_t)(127u -
 						((relative * 127u) / adjusted_range));
+					set_slider_value((uint8_t)selected_button, slider_index,
+						selected_geom_option, slider_value,
+						midi_slider_values, geom_slider_values);
 					bool slider_value_changed =
-						midi_slider_values[selected_button][slider_index] !=
-							previous_slider_value;
+						slider_value != previous_slider_value;
 					if (slider_value_changed) {
 						uint8_t value =
 							has_audio_control((uint8_t)selected_button) &&
 								audio_control_enabled[selected_button][slider_index]
 							? apply_adc_offset(
-								midi_slider_values[selected_button][slider_index],
+								slider_value,
 								adc_reading,
 								audio_scale_values[selected_button][slider_index],
 								audio_control_inverted[selected_button][slider_index])
-							: midi_slider_values[selected_button][slider_index];
+							: slider_value;
 						send_control_change(
 							slider_cc_number,
 							value);
@@ -921,7 +1120,7 @@ int lcd_test(void)
 					if (slider_value_changed) {
 						draw_cc_slider(active_slider_x, slider_y, slider_width,
 							slider_height,
-							midi_slider_values[selected_button][slider_index],
+							slider_value,
 							true);
 					}
 				} else if (selected_button >= 0 &&
@@ -946,11 +1145,17 @@ int lcd_test(void)
 					uint8_t value =
 						audio_control_enabled[selected_button][slider_index]
 						? apply_adc_offset(
-							midi_slider_values[selected_button][slider_index],
+							get_slider_value(
+								(uint8_t)selected_button, slider_index,
+								selected_geom_option, midi_slider_values,
+								geom_slider_values),
 							adc_reading,
 							audio_scale_values[selected_button][slider_index],
 							audio_control_inverted[selected_button][slider_index])
-						: midi_slider_values[selected_button][slider_index];
+						: get_slider_value(
+							(uint8_t)selected_button, slider_index,
+							selected_geom_option, midi_slider_values,
+							geom_slider_values);
 					send_control_change(
 						get_slider_cc_number(
 							(uint8_t)selected_button, slider_index,
@@ -981,9 +1186,29 @@ int lcd_test(void)
 			touch_latched = false;
 		}
 
+		bool geom_menu_visible = geom_options_enabled;
+		if (geom_menu_visible &&
+			(!displayed_geom_menu ||
+			 displayed_geom_option != selected_geom_option)) {
+			draw_geom_option_buttons(grid_x, grid_y,
+				final_row_button_width, BUTTON_GAP, button_height,
+				geom_option_labels, selected_geom_option, true);
+			displayed_geom_menu = true;
+			displayed_geom_option = selected_geom_option;
+		} else if (!geom_menu_visible && displayed_geom_menu) {
+			draw_geom_option_buttons(grid_x, grid_y,
+				final_row_button_width, BUTTON_GAP, button_height,
+				geom_option_labels, -1, false);
+			displayed_geom_menu = false;
+			displayed_geom_option = -1;
+		}
+
 		draw_cc_slider(slider_x, slider_y, slider_width, slider_height,
 				selected_button >= 0
-					? midi_slider_values[selected_button][0] : 0,
+					? get_slider_value((uint8_t)selected_button, 0,
+						selected_geom_option, midi_slider_values,
+						geom_slider_values)
+					: 0,
 				selected_button >= 0);
 		if (selected_button >= 0 &&
 			has_audio_control((uint8_t)selected_button)) {
@@ -1176,7 +1401,9 @@ int lcd_test(void)
 					 slider_index < slider_count; slider_index++) {
 					if (audio_control_enabled[i][slider_index]) {
 						uint8_t value = apply_adc_offset(
-							midi_slider_values[i][slider_index],
+							get_slider_value(i, slider_index,
+								selected_geom_option, midi_slider_values,
+								geom_slider_values),
 							adc_reading,
 							audio_scale_values[i][slider_index],
 							audio_control_inverted[i][slider_index]);
