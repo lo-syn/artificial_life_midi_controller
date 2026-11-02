@@ -48,7 +48,7 @@ extern LCD_DIS sLCD_DIS;
 #define OSC2_WAVE_BUTTON_START (BUTTON_COLUMNS * 4)
 #define OSC2_WAVE_BUTTON_COUNT BUTTON_COLUMNS
 #define COLOR_BUTTON_START ((BUTTON_ROWS - FOUR_BUTTON_ROWS) * BUTTON_COLUMNS)
-#define TOGGLE_BUTTON_START (COLOR_BUTTON_START + 8)
+#define TOGGLE_BUTTON_START (COLOR_BUTTON_START + 12)
 #define BUTTON_COUNT (TOGGLE_BUTTON_START + 4)
 #define BUTTON_GAP 6
 #define BUTTON_MARGIN 8
@@ -141,18 +141,10 @@ static void draw_button(POINT x, POINT y, POINT width, POINT height,
 static void draw_indexed_matrix_button(POINT x, POINT y, POINT width,
 									   POINT height, uint8_t button_index,
 									   const char *label, bool selected,
-									   bool send_enabled, bool audio_enabled,
-									   bool res_labels)
+									   bool send_enabled, bool audio_enabled)
 {
-	char numbered_label[8];
-	if (res_labels) {
-		snprintf(numbered_label, sizeof(numbered_label), "RES%u",
-			(unsigned int)button_index + 2u);
-		label = numbered_label;
-	}
-
 	draw_button(x, y, width, height, label, selected);
-	if (!res_labels && is_three_column_slider_button(button_index) &&
+	if (is_three_column_slider_button(button_index) &&
 		!selected && send_enabled && audio_enabled) {
 		POINT text_width = Font12.Width * strlen(label);
 		GUI_DisString_EN(x + (width - text_width) / 2,
@@ -165,30 +157,39 @@ static void draw_grid_button(POINT grid_x, POINT grid_y, POINT button_width,
 							 POINT final_row_button_width, POINT button_height,
 							 uint8_t button_index, const char *label,
 							 bool selected, bool send_enabled,
-							 bool audio_enabled, bool res_labels)
+							 bool audio_enabled)
 {
-	POINT row = button_index < COLOR_BUTTON_START
-		? button_index / BUTTON_COLUMNS
-		: BUTTON_ROWS - FOUR_BUTTON_ROWS +
+	POINT row;
+	POINT column;
+	POINT x_origin = grid_x;
+	if (button_index < COLOR_BUTTON_START) {
+		row = button_index / BUTTON_COLUMNS;
+		column = button_index % BUTTON_COLUMNS;
+	} else if (button_index < COLOR_BUTTON_START + 8) {
+		row = BUTTON_ROWS - FOUR_BUTTON_ROWS +
 			(button_index - COLOR_BUTTON_START) / 4;
-	POINT column = button_index < COLOR_BUTTON_START
-		? button_index % BUTTON_COLUMNS
-		: (button_index - COLOR_BUTTON_START) % 4;
+		column = (button_index - COLOR_BUTTON_START) % 4;
+	} else {
+		row = BUTTON_ROWS - 1;
+		column = button_index < TOGGLE_BUTTON_START
+			? button_index - (COLOR_BUTTON_START + 8)
+			: 4 + button_index - TOGGLE_BUTTON_START;
+		x_origin -= 4 * (final_row_button_width + BUTTON_GAP);
+	}
 	POINT current_button_width = button_index >= COLOR_BUTTON_START
 		? final_row_button_width : button_width;
-	POINT x = grid_x + column * (current_button_width + BUTTON_GAP);
+	POINT x = x_origin + column * (current_button_width + BUTTON_GAP);
 	POINT y = grid_y + row * (button_height + BUTTON_GAP);
 	draw_indexed_matrix_button(x, y, current_button_width, button_height,
-		button_index, label, selected, send_enabled, audio_enabled, res_labels);
+		button_index, label, selected, send_enabled, audio_enabled);
 }
 
 static void draw_osc_view_button(POINT x, POINT y, POINT width, POINT height,
-								 bool osc2_view_enabled, bool res_labels)
+								 bool osc2_view_enabled)
 {
 	draw_button(x, y, width, height,
-		res_labels ? "RES1" :
-			(osc2_view_enabled ? "OSC2 VIEW" : "OSC1 VIEW"),
-		!res_labels && osc2_view_enabled);
+		osc2_view_enabled ? "OSC2 VIEW" : "OSC1 VIEW",
+		osc2_view_enabled);
 }
 
 static void draw_reset_button(POINT x, POINT y, POINT width, POINT height,
@@ -225,9 +226,10 @@ static void draw_audio_invert_button(POINT x, POINT y, POINT width,
 
 static void draw_status(POINT grid_x, const char *message)
 {
-	GUI_DrawRectangle(0, 0, grid_x - 8, 34, BLACK,
+	const POINT status_y = 2;
+	GUI_DrawRectangle(0, 0, grid_x - 8, status_y + Font12.Height, BLACK,
 					  DRAW_FULL, DOT_PIXEL_1X1);
-	GUI_DisString_EN(10, 10, message, &Font12, BLACK, WHITE);
+	GUI_DisString_EN(10, status_y, message, &Font12, BLACK, WHITE);
 }
 
 static void draw_cc_slider(POINT x, POINT y, POINT width, POINT height,
@@ -254,25 +256,9 @@ static void draw_cc_slider(POINT x, POINT y, POINT width, POINT height,
 					  GREEN, DRAW_FULL, DOT_PIXEL_1X1);
 }
 
-static void draw_cc_send_toggle(POINT x, POINT y, POINT width, POINT height,
-								bool enabled, bool visible)
+static void draw_vu_meter_frame(POINT grid_x, POINT screen_height,
+								POINT meter_top)
 {
-	if (!visible) {
-		GUI_DrawRectangle(x - 2, y - 2, x + width + 2, y + height + 2,
-						  BLACK, DRAW_FULL, DOT_PIXEL_1X1);
-		return;
-	}
-
-	COLOR background = enabled ? WHITE : BLACK;
-	GUI_DrawRectangle(x + 1, y + 1, x + width - 1, y + height - 1,
-					  background, DRAW_FULL, DOT_PIXEL_1X1);
-	GUI_DrawRectangle(x, y, x + width, y + height, WHITE,
-					  DRAW_EMPTY, DOT_PIXEL_1X1);
-}
-
-static void draw_vu_meter_frame(POINT grid_x, POINT screen_height)
-{
-	const POINT meter_top = 72;
 	const POINT meter_bottom = screen_height - 48;
 	const POINT meter_x = 12;
 	const POINT label_x = meter_x + VU_BAR_WIDTH + 8;
@@ -292,11 +278,10 @@ static void draw_vu_meter_frame(POINT grid_x, POINT screen_height)
 }
 
 static void draw_vu_meter(POINT grid_x, POINT screen_height,
-						  uint16_t adc_reading)
+						  POINT meter_top, uint16_t adc_reading)
 {
 	static uint8_t previous_segments = UINT8_MAX;
 	static uint16_t previous_display_mv = UINT16_MAX;
-	const POINT meter_top = 72;
 	const POINT meter_bottom = screen_height - 48;
 	const POINT meter_x = 12;
 	const uint32_t millivolts =
@@ -331,7 +316,7 @@ static void draw_vu_meter(POINT grid_x, POINT screen_height,
 			 (unsigned int)((display_mv % 1000u) / 10u));
 	POINT value_width = Font12.Width * strlen(value_text);
 	POINT value_x = meter_x + (VU_BAR_WIDTH - value_width) / 2;
-	POINT value_y = meter_bottom + 8;
+	POINT value_y = meter_top - Font12.Height - 2;
 	GUI_DrawRectangle(value_x, value_y, value_x + value_width,
 					  value_y + Font12.Height, BLACK, DRAW_FULL,
 					  DOT_PIXEL_1X1);
@@ -366,7 +351,8 @@ int lcd_test(void)
 	POINT button_height =
 		(sLCD_DIS.LCD_Dis_Page - 2 * BUTTON_MARGIN -
 		 (BUTTON_ROWS - 1) * BUTTON_GAP) / BUTTON_ROWS;
-	draw_vu_meter_frame(grid_x, sLCD_DIS.LCD_Dis_Page);
+	const POINT meter_top = grid_y + button_height + BUTTON_GAP;
+	draw_vu_meter_frame(grid_x, sLCD_DIS.LCD_Dis_Page, meter_top);
 	const char *button_labels[BUTTON_COUNT] = {
 		"OSC1 AMP", "OSC1 MOVE", "OSC1 PM",
 		"OSC1 SQR", "OSC1 SAW", "OSC1 M",
@@ -376,17 +362,18 @@ int lcd_test(void)
 		"OSC2 RATE", "OSC2 FREQ", "OSC2 RM",
 		"SAT", "BAND1", "BAND2", "BAND3",
 		"rM", "MrM", "IFB", "mIFB",
+		"NEW1", "NEW2", "NEW3", "NEW4",
 		"OSC1 FB", "OSC2 FB", "M/DIST", "F/DIST"
 	};
 	const uint8_t button_cc_numbers[BUTTON_COUNT] = {
 		120, 121, 122, 0, 0, 0, 16, 17, 18, 123, 124, 125,
 		0, 0, 0, 19, 20, 21, 22, 22, 22, 22, 23, 23, 23, 23,
-		0, 0, 0, 0
+		0, 0, 0, 0, 0, 0, 0, 0
 	};
 	const uint8_t button_toggle_cc_numbers[BUTTON_COUNT] = {
 		0, 0, 0, 48, 64, 32, 0, 0, 0, 0, 0, 0,
 		51, 67, 35, 0, 0, 0, 70, 0, 38, 54, 0, 39, 55, 71,
-		43, 44, 60, 61
+		0, 0, 0, 0, 43, 44, 60, 61
 	};
 	int8_t selected_button = -1;
 	int8_t selected_four_button = -1;
@@ -414,18 +401,7 @@ int lcd_test(void)
 	const POINT reset_button_width = view_button_width;
 	const POINT reset_button_x = view_button_x - reset_button_width - BUTTON_GAP;
 	const POINT reset_button_y = grid_y;
-	const char *al_button_labels[] = { "AL", "WP", "SM" };
-	const POINT al_button_width = Font12.Width * strlen("AL") + 8;
-	const POINT al_button_height = button_height;
-	const POINT al_button_x = 10;
-	const POINT al_button_y = 40;
-	uint8_t al_button_label_index = 0;
 	bool osc2_view_enabled = false;
-	const POINT toggle_width = slider_width;
-	const POINT toggle_height = 26;
-	const POINT toggle_x = slider_x;
-	const POINT second_toggle_x = second_slider_x;
-	const POINT toggle_y = slider_y + slider_height + 12;
 	const POINT audio_button_width = Font12.Width * strlen("AUDIO") + 8;
 	const POINT audio_button_height = 26;
 	const POINT audio_button_x = second_slider_x;
@@ -443,12 +419,11 @@ int lcd_test(void)
 		audio_button_y + audio_button_height + 8;
 	const POINT audio_scale_slider_height =
 		slider_height - audio_button_height - 8;
-	const POINT audio_invert_button_y = toggle_y;
+	const POINT audio_invert_button_y = slider_y + slider_height + 12;
 	const POINT audio_invert_button_height = 22;
 	bool audio_control_enabled[BUTTON_COUNT][2] = { { false } };
 	bool audio_control_inverted[BUTTON_COUNT][2] = { { false } };
 	uint8_t audio_scale_values[BUTTON_COUNT][2] = { { 0 } };
-	bool cc_send_enabled[BUTTON_COUNT][2] = { { false } };
 	bool startup_toggle_reset_sent = false;
 	uint8_t last_audio_cc_values[BUTTON_COUNT][2];
 	memset(last_audio_cc_values, UINT8_MAX, sizeof(last_audio_cc_values));
@@ -461,43 +436,27 @@ int lcd_test(void)
 	bool second_slider_was_visible = false;
 
 	for (uint8_t i = 0; i < BUTTON_COUNT; i++) {
-		POINT row = i < COLOR_BUTTON_START
-			? i / BUTTON_COLUMNS
-			: BUTTON_ROWS - FOUR_BUTTON_ROWS +
-				(i - COLOR_BUTTON_START) / 4;
-		POINT column = i < COLOR_BUTTON_START
-			? i % BUTTON_COLUMNS : (i - COLOR_BUTTON_START) % 4;
-		POINT current_button_width = i >= COLOR_BUTTON_START
-			? final_row_button_width : button_width;
-		POINT x = grid_x + column * (current_button_width + BUTTON_GAP);
-		POINT y = grid_y + row * (button_height + BUTTON_GAP);
-		draw_indexed_matrix_button(x, y, current_button_width,
-			button_height, i, button_labels[i],
-			button_toggle_states[i], cc_send_enabled[i][0],
-			audio_control_enabled[i][0], al_button_label_index != 0);
+		draw_grid_button(grid_x, grid_y, button_width,
+			final_row_button_width, button_height, i, button_labels[i],
+			button_toggle_states[i], true,
+			audio_control_enabled[i][0]);
 	}
 	draw_osc_view_button(view_button_x, view_button_y, view_button_width,
-		button_height, false, al_button_label_index != 0);
+		button_height, false);
 	draw_reset_button(reset_button_x, reset_button_y, reset_button_width,
 		button_height, false);
 	draw_cc_slider(slider_x, slider_y, slider_width, slider_height,
 					0, false);
 	draw_cc_slider(second_slider_x, slider_y, slider_width, slider_height,
 					0, false);
-	draw_cc_send_toggle(toggle_x, toggle_y, toggle_width, toggle_height,
-							false, false);
-	draw_cc_send_toggle(second_toggle_x, toggle_y, toggle_width, toggle_height,
-							false, false);
 	draw_audio_control_button(audio_button_x, audio_button_y,
 		audio_button_width, audio_button_height, false, false);
 
 	draw_status(grid_x, "ADC INPUT");
 	draw_osc_view_button(view_button_x, view_button_y, view_button_width,
-		button_height, osc2_view_enabled, al_button_label_index != 0);
+		button_height, osc2_view_enabled);
 	draw_reset_button(reset_button_x, reset_button_y, reset_button_width,
 		button_height, false);
-	draw_button(al_button_x, al_button_y, al_button_width,
-		al_button_height, al_button_labels[al_button_label_index], false);
 	bool touch_latched = false;
 	bool touch_ready = false;
 	bool reset_button_pressed = false;
@@ -586,10 +545,8 @@ int lcd_test(void)
 						sizeof(audio_scale_values));
 					memset(last_audio_cc_values, UINT8_MAX,
 						sizeof(last_audio_cc_values));
-					memset(cc_send_enabled, 0, sizeof(cc_send_enabled));
 					selected_button = -1;
 					selected_four_button = -1;
-					al_button_label_index = 0;
 					if (osc2_view_enabled) {
 						osc2_view_enabled = false;
 					}
@@ -604,34 +561,16 @@ int lcd_test(void)
 					send_control_change(23, 0);
 					send_control_change(127, 0);
 					for (uint8_t i = 0; i < BUTTON_COUNT; i++) {
-						POINT button_row = i < COLOR_BUTTON_START
-							? i / BUTTON_COLUMNS
-							: BUTTON_ROWS - FOUR_BUTTON_ROWS +
-								(i - COLOR_BUTTON_START) / 4;
-						POINT button_column = i < COLOR_BUTTON_START
-							? i % BUTTON_COLUMNS
-							: (i - COLOR_BUTTON_START) % 4;
-						POINT current_button_width = i >= COLOR_BUTTON_START
-							? final_row_button_width : button_width;
-						POINT x = grid_x + button_column *
-							(current_button_width + BUTTON_GAP);
-						POINT y = grid_y + button_row *
-							(button_height + BUTTON_GAP);
-						draw_indexed_matrix_button(x, y,
-							current_button_width, button_height, i,
-							button_labels[i], false, false, false,
-							al_button_label_index != 0);
+						draw_grid_button(grid_x, grid_y, button_width,
+							final_row_button_width, button_height, i,
+							button_labels[i], false, false, false);
 					}
 					send_control_change(RESET_CC_NUMBER, 127);
 					draw_status(grid_x, "RESET");
 					draw_osc_view_button(view_button_x, view_button_y,
-						view_button_width, button_height, false,
-						al_button_label_index != 0);
+						view_button_width, button_height, false);
 					draw_reset_button(reset_button_x, reset_button_y,
 						reset_button_width, button_height, true);
-					draw_button(al_button_x, al_button_y, al_button_width,
-						al_button_height,
-						al_button_labels[al_button_label_index], false);
 				} else if (touch_x >= view_button_x &&
 					touch_x <= view_button_x + view_button_width &&
 					touch_y >= view_button_y &&
@@ -643,37 +582,26 @@ int lcd_test(void)
 						? "OSC 2 VIEW" : "OSC1 VIEW");
 					draw_osc_view_button(view_button_x, view_button_y,
 						view_button_width, button_height,
-						osc2_view_enabled, al_button_label_index != 0);
+						osc2_view_enabled);
 					draw_reset_button(reset_button_x, reset_button_y,
 						reset_button_width, button_height,
 						reset_button_pressed);
-				} else if (touch_x >= al_button_x &&
-					touch_x <= al_button_x + al_button_width &&
-					touch_y >= al_button_y &&
-					touch_y <= al_button_y + al_button_height) {
-					al_button_label_index =
-						(uint8_t)((al_button_label_index + 1) %
-							(sizeof(al_button_labels) /
-							 sizeof(al_button_labels[0])));
-					for (uint8_t i = 0; i < BUTTON_COUNT; i++) {
-						draw_grid_button(grid_x, grid_y, button_width,
-							final_row_button_width, button_height, i,
-							button_labels[i],
-							button_toggle_states[i] ||
-								selected_button == (int8_t)i ||
-								selected_four_button == (int8_t)i,
-							cc_send_enabled[i][0],
-							audio_control_enabled[i][0],
-							al_button_label_index != 0);
-					}
-					draw_osc_view_button(view_button_x, view_button_y,
-						view_button_width, button_height, osc2_view_enabled,
-						al_button_label_index != 0);
-					draw_button(al_button_x, al_button_y, al_button_width,
-						al_button_height,
-						al_button_labels[al_button_label_index], false);
-				} else if (touch_x >= grid_x && touch_y >= grid_y) {
-					POINT local_x = touch_x - grid_x;
+				} else if (touch_y >= grid_y &&
+					(touch_x >= grid_x ||
+					 (touch_y >= grid_y +
+						(BUTTON_ROWS - 1) * (button_height + BUTTON_GAP) &&
+					  touch_x >= grid_x -
+						4 * (final_row_button_width + BUTTON_GAP)))) {
+					POINT extended_row_y = grid_y +
+						(BUTTON_ROWS - 1) * (button_height + BUTTON_GAP);
+					bool is_extended_button_row =
+						touch_y >= extended_row_y &&
+						touch_y < extended_row_y + button_height;
+					POINT input_grid_x = is_extended_button_row
+						? grid_x -
+							4 * (final_row_button_width + BUTTON_GAP)
+						: grid_x;
+					POINT local_x = touch_x - input_grid_x;
 					POINT local_y = touch_y - grid_y;
 					POINT row = local_y / (button_height + BUTTON_GAP);
 					if (row < BUTTON_ROWS &&
@@ -682,18 +610,22 @@ int lcd_test(void)
 							row >= BUTTON_ROWS - FOUR_BUTTON_ROWS;
 						POINT current_button_width = is_four_button_row
 							? final_row_button_width : button_width;
-						POINT row_columns = is_four_button_row
-							? 4 : BUTTON_COLUMNS;
+						POINT row_columns = is_extended_button_row
+							? 8 : is_four_button_row ? 4 : BUTTON_COLUMNS;
 						POINT column = local_x /
 							(current_button_width + BUTTON_GAP);
 						if (column < row_columns &&
 							local_x % (current_button_width + BUTTON_GAP) <
 								current_button_width) {
-							POINT button_index = is_four_button_row
-								? COLOR_BUTTON_START +
+							POINT button_index = is_extended_button_row
+								? column < 4
+									? COLOR_BUTTON_START + 8 + column
+									: TOGGLE_BUTTON_START + column - 4
+								: is_four_button_row
+									? COLOR_BUTTON_START +
 									(row - (BUTTON_ROWS -
 										FOUR_BUTTON_ROWS)) * 4 + column
-								: row * BUTTON_COLUMNS + column;
+									: row * BUTTON_COLUMNS + column;
 							bool is_toggle_button =
 								(button_index >= OSC1_WAVE_BUTTON_START &&
 								 button_index < OSC1_WAVE_BUTTON_START +
@@ -725,8 +657,7 @@ int lcd_test(void)
 											final_row_button_width,
 											button_height, other_button_index,
 											button_labels[other_button_index],
-											false, false, false,
-											al_button_label_index != 0);
+											false, false, false);
 									}
 								}
 								button_toggle_states[button_index] =
@@ -734,19 +665,12 @@ int lcd_test(void)
 								send_control_change(
 									button_toggle_cc_numbers[button_index],
 									button_toggle_states[button_index] ? 127 : 0);
-								POINT current_button_width = is_four_button_row
-									? final_row_button_width : button_width;
-								POINT x = grid_x + column *
-									(current_button_width + BUTTON_GAP);
-								POINT y = grid_y + row *
-									(button_height + BUTTON_GAP);
-								draw_indexed_matrix_button(x, y,
-									current_button_width, button_height,
+								draw_grid_button(grid_x, grid_y, button_width,
+									final_row_button_width, button_height,
 									button_index, button_labels[button_index],
 									button_toggle_states[button_index],
-									cc_send_enabled[button_index][0],
-									audio_control_enabled[button_index][0],
-									al_button_label_index != 0);
+									true,
+									audio_control_enabled[button_index][0]);
 								char status_text[32];
 								snprintf(status_text, sizeof(status_text),
 									"CC %u = %u",
@@ -755,8 +679,7 @@ int lcd_test(void)
 								draw_status(grid_x, status_text);
 								draw_osc_view_button(view_button_x, view_button_y,
 									view_button_width, button_height,
-									osc2_view_enabled,
-									al_button_label_index != 0);
+									osc2_view_enabled);
 								draw_reset_button(reset_button_x, reset_button_y,
 									reset_button_width, button_height,
 									reset_button_pressed);
@@ -768,28 +691,25 @@ int lcd_test(void)
 								int8_t previous_four_button =
 									selected_four_button;
 								if (button_index >= COLOR_BUTTON_START) {
-									if (selected_four_button >=
-											COLOR_BUTTON_START &&
-										selected_four_button !=
-											(int8_t)button_index) {
-										if ((cc_send_enabled[
-												selected_four_button][0] ||
-											 cc_send_enabled[
-												selected_four_button][1]) &&
-											button_toggle_cc_numbers[
-												selected_four_button] != 0) {
-											send_control_change(
-												button_toggle_cc_numbers[
-													selected_four_button],
-												0);
-										}
-										cc_send_enabled[selected_four_button][0] =
-											false;
-										cc_send_enabled[selected_four_button][1] =
-											false;
-									}
 									selected_four_button = deselecting
 										? -1 : (int8_t)button_index;
+									if (previous_four_button >=
+											COLOR_BUTTON_START &&
+										previous_four_button !=
+											selected_four_button &&
+										button_toggle_cc_numbers[
+											previous_four_button] != 0) {
+										send_control_change(
+											button_toggle_cc_numbers[
+												previous_four_button], 0);
+									}
+									if (!deselecting &&
+										button_toggle_cc_numbers[
+											button_index] != 0) {
+										send_control_change(
+											button_toggle_cc_numbers[
+												button_index], 127);
+									}
 								}
 								selected_button = deselecting
 									? -1 : (int8_t)button_index;
@@ -803,11 +723,9 @@ int lcd_test(void)
 											previous_selected_button] ||
 											previous_selected_button ==
 												selected_four_button,
-										cc_send_enabled[
-												previous_selected_button][0],
+										true,
 										audio_control_enabled[
-												previous_selected_button][0],
-										al_button_label_index != 0);
+												previous_selected_button][0]);
 								}
 								if (previous_four_button >=
 										COLOR_BUTTON_START &&
@@ -820,11 +738,9 @@ int lcd_test(void)
 										button_labels[previous_four_button],
 										button_toggle_states[
 											previous_four_button],
-										cc_send_enabled[
-											previous_four_button][0],
+										true,
 										audio_control_enabled[
-											previous_four_button][0],
-										al_button_label_index != 0);
+											previous_four_button][0]);
 								}
 								if (!deselecting) {
 									draw_grid_button(grid_x, grid_y,
@@ -833,9 +749,8 @@ int lcd_test(void)
 										(uint8_t)button_index,
 										button_labels[button_index],
 										true,
-										cc_send_enabled[button_index][0],
-										audio_control_enabled[button_index][0],
-										al_button_label_index != 0);
+										true,
+										audio_control_enabled[button_index][0]);
 								}
 								if (deselecting) {
 									draw_status(grid_x, "DESELECTED");
@@ -848,8 +763,7 @@ int lcd_test(void)
 								}
 								draw_osc_view_button(view_button_x, view_button_y,
 									view_button_width, button_height,
-									osc2_view_enabled,
-									al_button_label_index != 0);
+									osc2_view_enabled);
 								draw_reset_button(reset_button_x, reset_button_y,
 									reset_button_width, button_height,
 									reset_button_pressed);
@@ -877,20 +791,18 @@ int lcd_test(void)
 						touch_x >= dual_audio_scale_x[1] ? 1 : 0;
 					audio_control_inverted[selected_button][slider_index] =
 						!audio_control_inverted[selected_button][slider_index];
-					if (cc_send_enabled[selected_button][slider_index]) {
-						uint8_t value = apply_adc_offset(
-							midi_slider_values[selected_button][slider_index],
-							adc_reading,
-							audio_scale_values[selected_button][slider_index],
-							audio_control_inverted[selected_button][slider_index]);
-						send_control_change(
-							get_slider_cc_number(
-								(uint8_t)selected_button, slider_index,
-								button_cc_numbers),
-							value);
-						last_audio_cc_values[selected_button][slider_index] =
-							value;
-					}
+					uint8_t value = apply_adc_offset(
+						midi_slider_values[selected_button][slider_index],
+						adc_reading,
+						audio_scale_values[selected_button][slider_index],
+						audio_control_inverted[selected_button][slider_index]);
+					send_control_change(
+						get_slider_cc_number(
+							(uint8_t)selected_button, slider_index,
+							button_cc_numbers),
+						value);
+					last_audio_cc_values[selected_button][slider_index] =
+						value;
 					char status_text[32];
 					snprintf(status_text, sizeof(status_text), "ADC INV %s",
 						audio_control_inverted[selected_button][slider_index]
@@ -898,7 +810,7 @@ int lcd_test(void)
 					draw_status(grid_x, status_text);
 					draw_osc_view_button(view_button_x, view_button_y,
 						view_button_width, button_height,
-						osc2_view_enabled, al_button_label_index != 0);
+						osc2_view_enabled);
 					draw_reset_button(reset_button_x, reset_button_y,
 						reset_button_width, button_height,
 						reset_button_pressed);
@@ -942,8 +854,7 @@ int lcd_test(void)
 					bool scale_value_changed =
 						audio_scale_values[selected_button][slider_index] !=
 							previous_scale_value;
-					if (scale_value_changed &&
-						cc_send_enabled[selected_button][slider_index]) {
+					if (scale_value_changed) {
 						uint8_t value = apply_adc_offset(
 							midi_slider_values[selected_button][slider_index],
 							adc_reading,
@@ -992,8 +903,7 @@ int lcd_test(void)
 					bool slider_value_changed =
 						midi_slider_values[selected_button][slider_index] !=
 							previous_slider_value;
-					if (slider_value_changed &&
-						cc_send_enabled[selected_button][slider_index]) {
+					if (slider_value_changed) {
 						uint8_t value =
 							has_audio_control((uint8_t)selected_button) &&
 								audio_control_enabled[selected_button][slider_index]
@@ -1037,91 +947,27 @@ int lcd_test(void)
 						touch_x >= dual_audio_button_x[1] ? 1 : 0;
 					audio_control_enabled[selected_button][slider_index] =
 						!audio_control_enabled[selected_button][slider_index];
-					if (cc_send_enabled[selected_button][slider_index]) {
-						uint8_t value =
-							audio_control_enabled[selected_button][slider_index]
-							? apply_adc_offset(
-								midi_slider_values[selected_button][slider_index],
-								adc_reading,
-								audio_scale_values[selected_button][slider_index],
-								audio_control_inverted[selected_button][slider_index])
-							: midi_slider_values[selected_button][slider_index];
-						send_control_change(
-							get_slider_cc_number(
-								(uint8_t)selected_button, slider_index,
-								button_cc_numbers),
-							value);
-						last_audio_cc_values[selected_button][slider_index] =
-							value;
-					}
+					uint8_t value =
+						audio_control_enabled[selected_button][slider_index]
+						? apply_adc_offset(
+							midi_slider_values[selected_button][slider_index],
+							adc_reading,
+							audio_scale_values[selected_button][slider_index],
+							audio_control_inverted[selected_button][slider_index])
+						: midi_slider_values[selected_button][slider_index];
+					send_control_change(
+						get_slider_cc_number(
+							(uint8_t)selected_button, slider_index,
+							button_cc_numbers),
+						value);
+					last_audio_cc_values[selected_button][slider_index] =
+						value;
 					draw_status(grid_x,
 						audio_control_enabled[selected_button][slider_index]
 						? "A_CTRL ON" : "A_CTRL OFF");
 					draw_osc_view_button(view_button_x, view_button_y,
 						view_button_width, button_height,
-						osc2_view_enabled, al_button_label_index != 0);
-					draw_reset_button(reset_button_x, reset_button_y,
-						reset_button_width, button_height,
-						reset_button_pressed);
-				} else if (selected_button >= 0 &&
-					touch_y >= toggle_y && touch_y <= toggle_y + toggle_height &&
-					((touch_x >= toggle_x &&
-					  touch_x <= toggle_x + toggle_width) ||
-					 (selected_button >= COLOR_BUTTON_START &&
-					  selected_button < TOGGLE_BUTTON_START &&
-					  touch_x >= second_toggle_x &&
-					  touch_x <= second_toggle_x + toggle_width))) {
-					uint8_t slider_index =
-						touch_x >= second_toggle_x ? 1 : 0;
-					uint8_t slider_cc_number =
-						get_slider_cc_number(
-							(uint8_t)selected_button, slider_index,
-							button_cc_numbers);
-					POINT active_toggle_x =
-						slider_index == 1 ? second_toggle_x : toggle_x;
-					cc_send_enabled[selected_button][slider_index] =
-						!cc_send_enabled[selected_button][slider_index];
-					if (button_toggle_cc_numbers[selected_button] != 0) {
-						send_control_change(
-							button_toggle_cc_numbers[selected_button],
-							cc_send_enabled[selected_button][slider_index]
-								? 127 : 0);
-					}
-					if (cc_send_enabled[selected_button][slider_index]) {
-						uint8_t value =
-							has_audio_control((uint8_t)selected_button) &&
-								audio_control_enabled[selected_button][slider_index]
-							? apply_adc_offset(
-								midi_slider_values[selected_button][slider_index],
-								adc_reading,
-								audio_scale_values[selected_button][slider_index],
-								audio_control_inverted[selected_button][slider_index])
-							: midi_slider_values[selected_button][slider_index];
-						send_control_change(
-							slider_cc_number, value);
-						if (has_audio_control((uint8_t)selected_button) &&
-							audio_control_enabled[selected_button][slider_index]) {
-							last_audio_cc_values[selected_button][slider_index] =
-								value;
-						}
-					}
-					draw_cc_send_toggle(active_toggle_x, toggle_y,
-						toggle_width, toggle_height,
-						cc_send_enabled[selected_button][slider_index], true);
-					char status_text[32];
-					if (cc_send_enabled[selected_button][slider_index] &&
-						button_toggle_cc_numbers[selected_button] != 0) {
-						snprintf(status_text, sizeof(status_text), "CC %u = 127",
-							(unsigned int)button_toggle_cc_numbers[selected_button]);
-					} else {
-						snprintf(status_text, sizeof(status_text), "CC SEND %s",
-							cc_send_enabled[selected_button][slider_index]
-								? "ON" : "OFF");
-					}
-					draw_status(grid_x, status_text);
-					draw_osc_view_button(view_button_x, view_button_y,
-						view_button_width, button_height,
-						osc2_view_enabled, al_button_label_index != 0);
+						osc2_view_enabled);
 					draw_reset_button(reset_button_x, reset_button_y,
 						reset_button_width, button_height,
 						reset_button_pressed);
@@ -1143,18 +989,6 @@ int lcd_test(void)
 				selected_button >= 0
 					? midi_slider_values[selected_button][0] : 0,
 				selected_button >= 0);
-		bool right_send_toggle_overlaps_invert =
-			selected_button >= 0 &&
-			has_audio_control((uint8_t)selected_button) &&
-			!has_dual_slider_audio((uint8_t)selected_button);
-		if (!right_send_toggle_overlaps_invert) {
-			draw_cc_send_toggle(second_toggle_x, toggle_y, toggle_width,
-				toggle_height,
-				selected_button >= 0 &&
-					cc_send_enabled[selected_button][1],
-				selected_button >= COLOR_BUTTON_START &&
-					selected_button < TOGGLE_BUTTON_START);
-		}
 		if (selected_button >= 0 &&
 			has_audio_control((uint8_t)selected_button)) {
 			bool dual_audio = has_dual_slider_audio(
@@ -1187,10 +1021,6 @@ int lcd_test(void)
 					draw_audio_invert_button(audio_scale_slider_x,
 						audio_invert_button_y, slider_width,
 						audio_invert_button_height, false, false);
-				}
-				if (!dual_audio) {
-					draw_cc_send_toggle(second_toggle_x, toggle_y,
-						toggle_width, toggle_height, false, false);
 				}
 			}
 			if (dual_audio) {
@@ -1343,17 +1173,12 @@ int lcd_test(void)
 			}
 			second_slider_was_visible = second_slider_visible;
 		}
-		draw_cc_send_toggle(toggle_x, toggle_y, toggle_width, toggle_height,
-			selected_button >= 0 &&
-				cc_send_enabled[selected_button][0], selected_button >= 0);
-
 		for (uint8_t i = 0; i < BUTTON_COUNT; i++) {
 			if (has_audio_control(i)) {
 				uint8_t slider_count = has_dual_slider_audio(i) ? 2 : 1;
 				for (uint8_t slider_index = 0;
 					 slider_index < slider_count; slider_index++) {
-					if (audio_control_enabled[i][slider_index] &&
-						cc_send_enabled[i][slider_index]) {
+					if (audio_control_enabled[i][slider_index]) {
 						uint8_t value = apply_adc_offset(
 							midi_slider_values[i][slider_index],
 							adc_reading,
@@ -1366,13 +1191,13 @@ int lcd_test(void)
 								value);
 							last_audio_cc_values[i][slider_index] = value;
 						}
-					} else if (!cc_send_enabled[i][slider_index]) {
+					} else {
 						last_audio_cc_values[i][slider_index] = UINT8_MAX;
 					}
 				}
 			}
 		}
-		draw_vu_meter(grid_x, sLCD_DIS.LCD_Dis_Page, adc_reading);
+		draw_vu_meter(grid_x, sLCD_DIS.LCD_Dis_Page, meter_top, adc_reading);
 
 		sleep_ms(20);
 	}
