@@ -678,6 +678,8 @@ int lcd_test(void)
 					touch_y <= reset_button_y + button_height) {
 					reset_button_pressed = true;
 					int8_t reset_geom_option = selected_geom_option;
+					bool osc1_m_was_enabled =
+						button_toggle_states[OSC1_M_BUTTON_INDEX];
 					if (reset_geom_option >= 0 &&
 						reset_geom_option < GEOM_OPTION_COUNT &&
 						geom_option_toggle_cc_numbers[
@@ -735,6 +737,12 @@ int lcd_test(void)
 						sizeof(button_toggle_states));
 					memset(osc1_m_wave_toggle_states, 0,
 						sizeof(osc1_m_wave_toggle_states));
+					button_toggle_states[
+						OSC1_WAVE_BUTTON_START] = false;
+					button_toggle_states[
+						OSC1_WAVE_BUTTON_START + 1] = false;
+					osc1_m_wave_toggle_states[0] = false;
+					osc1_m_wave_toggle_states[1] = false;
 					memset(audio_control_enabled, 0,
 						sizeof(audio_control_enabled));
 					memset(audio_control_inverted, 0,
@@ -775,6 +783,27 @@ int lcd_test(void)
 
 					send_control_change(RESET_CC_NUMBER, 127);
 					send_control_change(RESET_CC_NUMBER, 0);
+					send_control_change(
+						button_toggle_cc_numbers[
+							OSC1_WAVE_BUTTON_START], 0);
+					send_control_change(
+						button_toggle_cc_numbers[
+							OSC1_WAVE_BUTTON_START + 1], 0);
+					send_control_change(OSC1_M_CC_NUMBER,
+						osc1_m_was_enabled ? 0 : 127);
+					for (uint8_t i = 0; i < OSC1_CONTROL_COUNT; i++) {
+						if (button_cc_numbers[i] != 0) {
+							send_control_change(button_cc_numbers[i],
+								midi_slider_values[i][0]);
+						}
+					}
+					send_control_change(
+						button_toggle_cc_numbers[
+							OSC1_WAVE_BUTTON_START], 0);
+					send_control_change(
+						button_toggle_cc_numbers[
+							OSC1_WAVE_BUTTON_START + 1], 0);
+					send_control_change(OSC1_M_CC_NUMBER, 0);
 					draw_status(grid_x, "RESET");
 					draw_osc_view_button(view_button_x, view_button_y,
 						view_button_width, button_height, false);
@@ -906,6 +935,13 @@ int lcd_test(void)
 									OSC2_WAVE_BUTTON_COUNT) ||
 								button_index >= TOGGLE_BUTTON_START;
 							if (is_toggle_button) {
+								if (is_osc1_wave_button(
+										(uint8_t)button_index) &&
+									!button_toggle_states[
+										OSC1_M_BUTTON_INDEX]) {
+									send_control_change(
+										OSC1_M_CC_NUMBER, 0);
+								}
 								bool *toggle_state =
 									is_osc1_wave_button(
 										(uint8_t)button_index) &&
@@ -963,10 +999,13 @@ int lcd_test(void)
 											? osc1_m_wave_toggle_states[i]
 											: button_toggle_states[
 												wave_button_index];
-										send_control_change(
-											button_toggle_cc_numbers[
-												wave_button_index],
-											wave_selected ? 127 : 0);
+										if (!button_toggle_states[
+												OSC1_M_BUTTON_INDEX]) {
+											send_control_change(
+												button_toggle_cc_numbers[
+													wave_button_index],
+												wave_selected ? 127 : 0);
+										}
 										draw_grid_button(grid_x, grid_y,
 											button_width,
 											final_row_button_width,
