@@ -48,7 +48,7 @@ extern LCD_DIS sLCD_DIS;
 #define OSC2_WAVE_BUTTON_START (BUTTON_COLUMNS * 4)
 #define OSC2_WAVE_BUTTON_COUNT BUTTON_COLUMNS
 #define COLOR_BUTTON_START ((BUTTON_ROWS - FOUR_BUTTON_ROWS) * BUTTON_COLUMNS)
-#define TOGGLE_BUTTON_START (COLOR_BUTTON_START + 12)
+#define TOGGLE_BUTTON_START (COLOR_BUTTON_START + 8)
 #define BUTTON_COUNT (TOGGLE_BUTTON_START + 4)
 #define BUTTON_GAP 6
 #define BUTTON_MARGIN 8
@@ -171,9 +171,7 @@ static void draw_grid_button(POINT grid_x, POINT grid_y, POINT button_width,
 		column = (button_index - COLOR_BUTTON_START) % 4;
 	} else {
 		row = BUTTON_ROWS - 1;
-		column = button_index < TOGGLE_BUTTON_START
-			? button_index - (COLOR_BUTTON_START + 8)
-			: 4 + button_index - TOGGLE_BUTTON_START;
+		column = 4 + button_index - TOGGLE_BUTTON_START;
 		x_origin -= 4 * (final_row_button_width + BUTTON_GAP);
 	}
 	POINT current_button_width = button_index >= COLOR_BUTTON_START
@@ -362,18 +360,17 @@ int lcd_test(void)
 		"OSC2 RATE", "OSC2 FREQ", "OSC2 RM",
 		"SAT", "BAND1", "BAND2", "BAND3",
 		"rM", "MrM", "IFB", "mIFB",
-		"NEW1", "NEW2", "NEW3", "NEW4",
 		"OSC1 FB", "OSC2 FB", "M/DIST", "F/DIST"
 	};
 	const uint8_t button_cc_numbers[BUTTON_COUNT] = {
 		120, 121, 122, 0, 0, 0, 16, 17, 18, 123, 124, 125,
 		0, 0, 0, 19, 20, 21, 22, 22, 22, 22, 23, 23, 23, 23,
-		0, 0, 0, 0, 0, 0, 0, 0
+		0, 0, 0, 0
 	};
 	const uint8_t button_toggle_cc_numbers[BUTTON_COUNT] = {
 		0, 0, 0, 48, 64, 32, 0, 0, 0, 0, 0, 0,
 		51, 67, 35, 0, 0, 0, 70, 0, 38, 54, 0, 39, 55, 71,
-		0, 0, 0, 0, 43, 44, 60, 61
+		43, 44, 60, 61
 	};
 	int8_t selected_button = -1;
 	int8_t selected_four_button = -1;
@@ -615,12 +612,11 @@ int lcd_test(void)
 						POINT column = local_x /
 							(current_button_width + BUTTON_GAP);
 						if (column < row_columns &&
+							(!is_extended_button_row || column >= 4) &&
 							local_x % (current_button_width + BUTTON_GAP) <
 								current_button_width) {
 							POINT button_index = is_extended_button_row
-								? column < 4
-									? COLOR_BUTTON_START + 8 + column
-									: TOGGLE_BUTTON_START + column - 4
+								? TOGGLE_BUTTON_START + column - 4
 								: is_four_button_row
 									? COLOR_BUTTON_START +
 									(row - (BUTTON_ROWS -
