@@ -45,6 +45,8 @@ extern LCD_DIS sLCD_DIS;
 #define FOUR_BUTTON_ROWS 3
 #define OSC1_WAVE_BUTTON_START BUTTON_COLUMNS
 #define OSC1_WAVE_BUTTON_COUNT BUTTON_COLUMNS
+#define OSC1_M_BUTTON_INDEX (OSC1_WAVE_BUTTON_START + 2)
+#define OSC1_CONTROL_COUNT (BUTTON_COLUMNS * 3)
 #define OSC2_WAVE_BUTTON_START (BUTTON_COLUMNS * 4)
 #define OSC2_WAVE_BUTTON_COUNT BUTTON_COLUMNS
 #define COLOR_BUTTON_START ((BUTTON_ROWS - FOUR_BUTTON_ROWS) * BUTTON_COLUMNS)
@@ -107,6 +109,14 @@ static bool has_dual_slider_audio(uint8_t button_index)
 		button_index < TOGGLE_BUTTON_START;
 }
 
+static bool has_osc1_m_slider(uint8_t button_index)
+{
+	return button_index < OSC1_CONTROL_COUNT &&
+		button_index != OSC1_WAVE_BUTTON_START &&
+		button_index != OSC1_WAVE_BUTTON_START + 1 &&
+		button_index != OSC1_M_BUTTON_INDEX;
+}
+
 static uint8_t get_slider_cc_number(uint8_t button_index,
 									uint8_t slider_index,
 									const uint8_t *button_cc_numbers)
@@ -123,8 +133,18 @@ static uint8_t get_slider_cc_number(uint8_t button_index,
 static uint8_t get_slider_value(
 	uint8_t button_index, uint8_t slider_index, int8_t geom_option,
 	const uint8_t midi_slider_values[BUTTON_COUNT][2],
-	const uint8_t geom_slider_values[GEOM_OPTION_COUNT])
+	const uint8_t geom_slider_values[GEOM_OPTION_COUNT],
+	bool osc1_m_mode,
+	const uint8_t osc1_m_slider_values[BUTTON_COUNT][2],
+	const uint8_t osc1_m_geom_slider_values[GEOM_OPTION_COUNT])
 {
+	if (osc1_m_mode && button_index < OSC1_CONTROL_COUNT) {
+		if (button_index == GEOM_BUTTON_INDEX && slider_index == 0 &&
+			geom_option >= 0 && geom_option < GEOM_OPTION_COUNT) {
+			return osc1_m_geom_slider_values[geom_option];
+		}
+		return osc1_m_slider_values[button_index][slider_index];
+	}
 	if (button_index == GEOM_BUTTON_INDEX && slider_index == 0 &&
 		geom_option >= 0 && geom_option < GEOM_OPTION_COUNT) {
 		return geom_slider_values[geom_option];
@@ -135,8 +155,19 @@ static uint8_t get_slider_value(
 static void set_slider_value(
 	uint8_t button_index, uint8_t slider_index, int8_t geom_option,
 	uint8_t value, uint8_t midi_slider_values[BUTTON_COUNT][2],
-	uint8_t geom_slider_values[GEOM_OPTION_COUNT])
+	uint8_t geom_slider_values[GEOM_OPTION_COUNT], bool osc1_m_mode,
+	uint8_t osc1_m_slider_values[BUTTON_COUNT][2],
+	uint8_t osc1_m_geom_slider_values[GEOM_OPTION_COUNT])
 {
+	if (osc1_m_mode && button_index < OSC1_CONTROL_COUNT) {
+		if (button_index == GEOM_BUTTON_INDEX && slider_index == 0 &&
+			geom_option >= 0 && geom_option < GEOM_OPTION_COUNT) {
+			osc1_m_geom_slider_values[geom_option] = value;
+			return;
+		}
+		osc1_m_slider_values[button_index][slider_index] = value;
+		return;
+	}
 	if (button_index == GEOM_BUTTON_INDEX && slider_index == 0 &&
 		geom_option >= 0 && geom_option < GEOM_OPTION_COUNT) {
 		geom_slider_values[geom_option] = value;
@@ -444,6 +475,10 @@ int lcd_test(void)
 	int8_t displayed_geom_option = -1;
 	uint8_t midi_slider_values[BUTTON_COUNT][2] = { { 0 } };
 	uint8_t geom_slider_values[GEOM_OPTION_COUNT] = { 0, 0, 63, 63 };
+	uint8_t osc1_m_slider_values[BUTTON_COUNT][2] = { { 0 } };
+	uint8_t osc1_m_geom_slider_values[GEOM_OPTION_COUNT] = {
+		0, 0, 63, 63
+	};
 	midi_slider_values[0][0] = 127;
 	midi_slider_values[9][0] = 127;
 	midi_slider_values[6][0] = 63;
@@ -452,6 +487,10 @@ int lcd_test(void)
 	midi_slider_values[15][0] = 63;
 	midi_slider_values[16][0] = 63;
 	midi_slider_values[17][0] = 63;
+	osc1_m_slider_values[0][0] = 127;
+	osc1_m_slider_values[6][0] = 63;
+	osc1_m_slider_values[7][0] = 63;
+	osc1_m_slider_values[8][0] = 63;
 	bool button_toggle_states[BUTTON_COUNT] = { false };
 	const POINT left_meter_x = 12;
 	const POINT meter_end_x = left_meter_x + VU_BAR_WIDTH + 44;
@@ -616,10 +655,16 @@ int lcd_test(void)
 						send_control_change(OSC_VIEW_CC_NUMBER, 0);
 					}
 					memset(midi_slider_values, 0, sizeof(midi_slider_values));
+					memset(osc1_m_slider_values, 0,
+						sizeof(osc1_m_slider_values));
 					geom_slider_values[0] = 0;
 					geom_slider_values[1] = 0;
 					geom_slider_values[2] = 63;
 					geom_slider_values[3] = 63;
+					osc1_m_geom_slider_values[0] = 0;
+					osc1_m_geom_slider_values[1] = 0;
+					osc1_m_geom_slider_values[2] = 63;
+					osc1_m_geom_slider_values[3] = 63;
 					midi_slider_values[0][0] = 127;
 					midi_slider_values[9][0] = 127;
 					midi_slider_values[6][0] = 63;
@@ -628,6 +673,10 @@ int lcd_test(void)
 					midi_slider_values[15][0] = 63;
 					midi_slider_values[16][0] = 63;
 					midi_slider_values[17][0] = 63;
+					osc1_m_slider_values[0][0] = 127;
+					osc1_m_slider_values[6][0] = 63;
+					osc1_m_slider_values[7][0] = 63;
+					osc1_m_slider_values[8][0] = 63;
 					memset(button_toggle_states, 0,
 						sizeof(button_toggle_states));
 					memset(audio_control_enabled, 0,
@@ -727,7 +776,10 @@ int lcd_test(void)
 							uint8_t value = get_slider_value(
 								GEOM_BUTTON_INDEX, 0,
 								selected_geom_option, midi_slider_values,
-								geom_slider_values);
+								geom_slider_values,
+								button_toggle_states[OSC1_M_BUTTON_INDEX],
+								osc1_m_slider_values,
+								osc1_m_geom_slider_values);
 							if (audio_control_enabled[
 									GEOM_BUTTON_INDEX][0]) {
 								value = apply_adc_offset(value, adc_reading,
@@ -820,6 +872,36 @@ int lcd_test(void)
 								send_control_change(
 									button_toggle_cc_numbers[button_index],
 									button_toggle_states[button_index] ? 127 : 0);
+								if (button_index == OSC1_M_BUTTON_INDEX &&
+									selected_button >= 0 &&
+									has_osc1_m_slider(
+										(uint8_t)selected_button)) {
+									uint8_t value = get_slider_value(
+										(uint8_t)selected_button, 0,
+										selected_geom_option,
+										midi_slider_values,
+										geom_slider_values,
+										button_toggle_states[
+											OSC1_M_BUTTON_INDEX],
+										osc1_m_slider_values,
+										osc1_m_geom_slider_values);
+									if (audio_control_enabled[
+											selected_button][0]) {
+										value = apply_adc_offset(value,
+											adc_reading,
+											audio_scale_values[
+												selected_button][0],
+											audio_control_inverted[
+												selected_button][0]);
+										last_audio_cc_values[
+											selected_button][0] = value;
+									}
+									send_control_change(
+										get_slider_cc_number(
+											(uint8_t)selected_button, 0,
+											button_cc_numbers),
+										value);
+								}
 								draw_grid_button(grid_x, grid_y, button_width,
 									final_row_button_width, button_height,
 									button_index, button_labels[button_index],
@@ -882,7 +964,11 @@ int lcd_test(void)
 										GEOM_BUTTON_INDEX, 0,
 										selected_geom_option,
 										midi_slider_values,
-										geom_slider_values);
+										geom_slider_values,
+										button_toggle_states[
+											OSC1_M_BUTTON_INDEX],
+										osc1_m_slider_values,
+										osc1_m_geom_slider_values);
 									if (audio_control_enabled[
 											GEOM_BUTTON_INDEX][0]) {
 										value = apply_adc_offset(value,
@@ -980,7 +1066,10 @@ int lcd_test(void)
 						get_slider_value(
 							(uint8_t)selected_button, slider_index,
 							selected_geom_option, midi_slider_values,
-							geom_slider_values),
+							geom_slider_values,
+							button_toggle_states[OSC1_M_BUTTON_INDEX],
+							osc1_m_slider_values,
+							osc1_m_geom_slider_values),
 						adc_reading,
 						audio_scale_values[selected_button][slider_index],
 						audio_control_inverted[selected_button][slider_index]);
@@ -1047,7 +1136,11 @@ int lcd_test(void)
 							get_slider_value(
 								(uint8_t)selected_button, slider_index,
 								selected_geom_option, midi_slider_values,
-								geom_slider_values),
+								geom_slider_values,
+								button_toggle_states[
+									OSC1_M_BUTTON_INDEX],
+								osc1_m_slider_values,
+								osc1_m_geom_slider_values),
 							adc_reading,
 							audio_scale_values[selected_button][slider_index],
 							audio_control_inverted[selected_button][slider_index]);
@@ -1090,12 +1183,18 @@ int lcd_test(void)
 					uint8_t previous_slider_value = get_slider_value(
 						(uint8_t)selected_button, slider_index,
 						selected_geom_option, midi_slider_values,
-						geom_slider_values);
+						geom_slider_values,
+						button_toggle_states[OSC1_M_BUTTON_INDEX],
+						osc1_m_slider_values,
+						osc1_m_geom_slider_values);
 					uint8_t slider_value = (uint8_t)(127u -
 						((relative * 127u) / adjusted_range));
 					set_slider_value((uint8_t)selected_button, slider_index,
 						selected_geom_option, slider_value,
-						midi_slider_values, geom_slider_values);
+						midi_slider_values, geom_slider_values,
+						button_toggle_states[OSC1_M_BUTTON_INDEX],
+						osc1_m_slider_values,
+						osc1_m_geom_slider_values);
 					bool slider_value_changed =
 						slider_value != previous_slider_value;
 					if (slider_value_changed) {
@@ -1148,14 +1247,21 @@ int lcd_test(void)
 							get_slider_value(
 								(uint8_t)selected_button, slider_index,
 								selected_geom_option, midi_slider_values,
-								geom_slider_values),
+								geom_slider_values,
+								button_toggle_states[
+									OSC1_M_BUTTON_INDEX],
+								osc1_m_slider_values,
+								osc1_m_geom_slider_values),
 							adc_reading,
 							audio_scale_values[selected_button][slider_index],
 							audio_control_inverted[selected_button][slider_index])
 						: get_slider_value(
 							(uint8_t)selected_button, slider_index,
 							selected_geom_option, midi_slider_values,
-							geom_slider_values);
+							geom_slider_values,
+							button_toggle_states[OSC1_M_BUTTON_INDEX],
+							osc1_m_slider_values,
+							osc1_m_geom_slider_values);
 					send_control_change(
 						get_slider_cc_number(
 							(uint8_t)selected_button, slider_index,
@@ -1207,7 +1313,10 @@ int lcd_test(void)
 				selected_button >= 0
 					? get_slider_value((uint8_t)selected_button, 0,
 						selected_geom_option, midi_slider_values,
-						geom_slider_values)
+						geom_slider_values,
+						button_toggle_states[OSC1_M_BUTTON_INDEX],
+						osc1_m_slider_values,
+						osc1_m_geom_slider_values)
 					: 0,
 				selected_button >= 0);
 		if (selected_button >= 0 &&
@@ -1403,7 +1512,11 @@ int lcd_test(void)
 						uint8_t value = apply_adc_offset(
 							get_slider_value(i, slider_index,
 								selected_geom_option, midi_slider_values,
-								geom_slider_values),
+								geom_slider_values,
+								button_toggle_states[
+									OSC1_M_BUTTON_INDEX],
+								osc1_m_slider_values,
+								osc1_m_geom_slider_values),
 							adc_reading,
 							audio_scale_values[i][slider_index],
 							audio_control_inverted[i][slider_index]);
