@@ -23,7 +23,7 @@
             "command": "${env:HOME}/.pico-sdk/picotool/2.3.1/picotool/picotool",
             "args": [
                 "load",
-                "${command:raspberry-pi-pico.launchTargetPath}",
+                "${workspaceFolder}/build/main.elf",
                 "-fx"
             ],
             "presentation": {
