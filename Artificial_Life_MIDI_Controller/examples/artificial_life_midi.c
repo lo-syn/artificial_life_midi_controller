@@ -504,21 +504,27 @@ int artificial_life_midi(void)
 	GUI_Clear(BLACK);
 	const char *splash_text = "ARTIFICIAL LIFE";
 	const char *splash_subtitle = "MIDI Controller";
-	const char *splash_author = "lo_syn 2026";
+	const char *splash_author = "lo_syn";
+	const char *splash_version = "v1.0.0";
 	POINT splash_width = Font24.Width * strlen(splash_text);
 	POINT subtitle_width = Font20.Width * strlen(splash_subtitle);
 	POINT author_width = Font16.Width * strlen(splash_author);
+	POINT version_width = Font16.Width * strlen(splash_version);
 	POINT splash_x = (sLCD_DIS.LCD_Dis_Column - splash_width) / 2;
 	POINT subtitle_x = (sLCD_DIS.LCD_Dis_Column - subtitle_width) / 2;
 	POINT author_x = (sLCD_DIS.LCD_Dis_Column - author_width) / 2;
+	POINT version_x = (sLCD_DIS.LCD_Dis_Column - version_width) / 2;
 	POINT splash_y = (sLCD_DIS.LCD_Dis_Page -
-		Font24.Height - Font20.Height - Font16.Height - 16) / 2;
+		Font24.Height - Font20.Height - 2 * Font16.Height - 24) / 2;
 	GUI_DisString_EN(splash_x, splash_y, splash_text, &Font24, BLACK, WHITE);
 	GUI_DisString_EN(subtitle_x,
 		splash_y + Font24.Height + 8, splash_subtitle, &Font20, BLACK, WHITE);
 	GUI_DisString_EN(author_x,
 		splash_y + Font24.Height + Font20.Height + 16,
 		splash_author, &Font16, BLACK, WHITE);
+	GUI_DisString_EN(version_x,
+		splash_y + Font24.Height + Font20.Height + 2 * Font16.Height + 24,
+		splash_version, &Font16, BLACK, WHITE);
 	sleep_ms(5000);
 	GUI_Clear(BLACK);
 
