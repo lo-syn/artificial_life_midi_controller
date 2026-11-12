@@ -49,6 +49,7 @@ extern LCD_DIS sLCD_DIS;
 #define OSC1_CONTROL_COUNT (BUTTON_COLUMNS * 3)
 #define OSC2_WAVE_BUTTON_START (BUTTON_COLUMNS * 4)
 #define OSC2_WAVE_BUTTON_COUNT BUTTON_COLUMNS
+#define OSC2_M_BUTTON_INDEX (OSC2_WAVE_BUTTON_START + 2)
 #define COLOR_BUTTON_START ((BUTTON_ROWS - FOUR_BUTTON_ROWS) * BUTTON_COLUMNS)
 #define TOGGLE_BUTTON_START (COLOR_BUTTON_START + 8)
 #define BUTTON_COUNT (TOGGLE_BUTTON_START + 4)
@@ -117,10 +118,30 @@ static bool has_osc1_m_slider(uint8_t button_index)
 		button_index != OSC1_M_BUTTON_INDEX;
 }
 
+static bool has_osc2_m_slider(uint8_t button_index)
+{
+	return button_index >= OSC1_CONTROL_COUNT &&
+		button_index < OSC1_CONTROL_COUNT + OSC1_CONTROL_COUNT &&
+		button_index != OSC2_WAVE_BUTTON_START &&
+		button_index != OSC2_WAVE_BUTTON_START + 1 &&
+		button_index != OSC2_M_BUTTON_INDEX;
+}
+
 static uint8_t get_audio_state_bank(uint8_t button_index,
 									bool osc1_m_mode)
 {
 	return osc1_m_mode && has_osc1_m_slider(button_index) ? 1 : 0;
+}
+
+static bool is_osc1_button(uint8_t button_index)
+{
+	return button_index < OSC1_CONTROL_COUNT;
+}
+
+static bool is_osc2_button(uint8_t button_index)
+{
+	return button_index >= OSC1_CONTROL_COUNT &&
+		button_index < OSC1_CONTROL_COUNT + OSC1_CONTROL_COUNT;
 }
 
 static bool is_osc1_wave_button(uint8_t button_index)
@@ -128,6 +149,15 @@ static bool is_osc1_wave_button(uint8_t button_index)
 	return button_index >= OSC1_WAVE_BUTTON_START &&
 		button_index < OSC1_WAVE_BUTTON_START + 2;
 }
+
+static bool is_osc2_wave_button(uint8_t button_index)
+{
+	return button_index >= OSC2_WAVE_BUTTON_START &&
+		button_index < OSC2_WAVE_BUTTON_START + 2;
+}
+
+static bool g_osc1_m_mode = false;
+static bool g_osc2_m_mode = false;
 
 static uint8_t get_slider_cc_number(uint8_t button_index,
 									uint8_t slider_index,
@@ -146,16 +176,27 @@ static uint8_t get_slider_value(
 	uint8_t button_index, uint8_t slider_index, int8_t geom_option,
 	const uint8_t midi_slider_values[BUTTON_COUNT][2],
 	const uint8_t geom_slider_values[GEOM_OPTION_COUNT],
-	bool osc1_m_mode,
-	const uint8_t osc1_m_slider_values[BUTTON_COUNT][2],
-	const uint8_t osc1_m_geom_slider_values[GEOM_OPTION_COUNT])
+	bool osc1_m_mode, const uint8_t osc1_m_slider_values[BUTTON_COUNT][2],
+	const uint8_t osc1_m_geom_slider_values[GEOM_OPTION_COUNT],
+	bool osc2_m_mode,
+	const uint8_t osc2_m_slider_values[BUTTON_COUNT][2],
+	const uint8_t osc2_m_geom_slider_values[GEOM_OPTION_COUNT])
 {
-	if (osc1_m_mode && button_index < OSC1_CONTROL_COUNT) {
+	if (osc1_m_mode && is_osc1_button(button_index) &&
+		has_osc1_m_slider(button_index)) {
 		if (button_index == GEOM_BUTTON_INDEX && slider_index == 0 &&
 			geom_option >= 0 && geom_option < GEOM_OPTION_COUNT) {
 			return osc1_m_geom_slider_values[geom_option];
 		}
 		return osc1_m_slider_values[button_index][slider_index];
+	}
+	if (osc2_m_mode && is_osc2_button(button_index) &&
+		has_osc2_m_slider(button_index)) {
+		if (button_index == GEOM_BUTTON_INDEX && slider_index == 0 &&
+			geom_option >= 0 && geom_option < GEOM_OPTION_COUNT) {
+			return osc2_m_geom_slider_values[geom_option];
+		}
+		return osc2_m_slider_values[button_index][slider_index];
 	}
 	if (button_index == GEOM_BUTTON_INDEX && slider_index == 0 &&
 		geom_option >= 0 && geom_option < GEOM_OPTION_COUNT) {
@@ -169,15 +210,28 @@ static void set_slider_value(
 	uint8_t value, uint8_t midi_slider_values[BUTTON_COUNT][2],
 	uint8_t geom_slider_values[GEOM_OPTION_COUNT], bool osc1_m_mode,
 	uint8_t osc1_m_slider_values[BUTTON_COUNT][2],
-	uint8_t osc1_m_geom_slider_values[GEOM_OPTION_COUNT])
+	uint8_t osc1_m_geom_slider_values[GEOM_OPTION_COUNT], bool osc2_m_mode,
+	uint8_t osc2_m_slider_values[BUTTON_COUNT][2],
+	uint8_t osc2_m_geom_slider_values[GEOM_OPTION_COUNT])
 {
-	if (osc1_m_mode && button_index < OSC1_CONTROL_COUNT) {
+	if (osc1_m_mode && is_osc1_button(button_index) &&
+		has_osc1_m_slider(button_index)) {
 		if (button_index == GEOM_BUTTON_INDEX && slider_index == 0 &&
 			geom_option >= 0 && geom_option < GEOM_OPTION_COUNT) {
 			osc1_m_geom_slider_values[geom_option] = value;
 			return;
 		}
 		osc1_m_slider_values[button_index][slider_index] = value;
+		return;
+	}
+	if (osc2_m_mode && is_osc2_button(button_index) &&
+		has_osc2_m_slider(button_index)) {
+		if (button_index == GEOM_BUTTON_INDEX && slider_index == 0 &&
+			geom_option >= 0 && geom_option < GEOM_OPTION_COUNT) {
+			osc2_m_geom_slider_values[geom_option] = value;
+			return;
+		}
+		osc2_m_slider_values[button_index][slider_index] = value;
 		return;
 	}
 	if (button_index == GEOM_BUTTON_INDEX && slider_index == 0 &&
@@ -215,7 +269,8 @@ static void draw_indexed_matrix_button(POINT x, POINT y, POINT width,
 									   const char *label, bool selected,
 									   bool send_enabled, bool audio_enabled)
 {
-	if (button_index == OSC1_M_BUTTON_INDEX && selected) {
+	if ((button_index == OSC1_M_BUTTON_INDEX ||
+		button_index == OSC2_M_BUTTON_INDEX) && selected) {
 		GUI_DrawRectangle(x, y, x + width, y + height, RED,
 			DRAW_FULL, DOT_PIXEL_1X1);
 		GUI_DrawRectangle(x, y, x + width, y + height, WHITE,
@@ -434,7 +489,7 @@ static void draw_vu_meter(POINT grid_x, POINT screen_height,
 	previous_display_mv = display_mv;
 }
 
-int lcd_test(void)
+int artificial_life_midi(void)
 {
 	System_Init();
 	LCD_SCAN_DIR lcd_scan_dir = D2U_L2R;
@@ -447,6 +502,26 @@ int lcd_test(void)
 	adc_select_input(VU_ADC_CHANNEL);
 
 	GUI_Clear(BLACK);
+	const char *splash_text = "ARTIFICIAL LIFE";
+	const char *splash_subtitle = "MIDI Controller";
+	const char *splash_author = "lo_syn 2026";
+	POINT splash_width = Font24.Width * strlen(splash_text);
+	POINT subtitle_width = Font20.Width * strlen(splash_subtitle);
+	POINT author_width = Font16.Width * strlen(splash_author);
+	POINT splash_x = (sLCD_DIS.LCD_Dis_Column - splash_width) / 2;
+	POINT subtitle_x = (sLCD_DIS.LCD_Dis_Column - subtitle_width) / 2;
+	POINT author_x = (sLCD_DIS.LCD_Dis_Column - author_width) / 2;
+	POINT splash_y = (sLCD_DIS.LCD_Dis_Page -
+		Font24.Height - Font20.Height - Font16.Height - 16) / 2;
+	GUI_DisString_EN(splash_x, splash_y, splash_text, &Font24, BLACK, WHITE);
+	GUI_DisString_EN(subtitle_x,
+		splash_y + Font24.Height + 8, splash_subtitle, &Font20, BLACK, WHITE);
+	GUI_DisString_EN(author_x,
+		splash_y + Font24.Height + Font20.Height + 16,
+		splash_author, &Font16, BLACK, WHITE);
+	sleep_ms(5000);
+	GUI_Clear(BLACK);
+
 	POINT grid_x = sLCD_DIS.LCD_Dis_Column / 2 + BUTTON_MARGIN;
 	POINT grid_y = BUTTON_MARGIN;
 	POINT button_width =
@@ -499,7 +574,11 @@ int lcd_test(void)
 	uint8_t midi_slider_values[BUTTON_COUNT][2] = { { 0 } };
 	uint8_t geom_slider_values[GEOM_OPTION_COUNT] = { 0, 0, 63, 63 };
 	uint8_t osc1_m_slider_values[BUTTON_COUNT][2] = { { 0 } };
+	uint8_t osc2_m_slider_values[BUTTON_COUNT][2] = { { 0 } };
 	uint8_t osc1_m_geom_slider_values[GEOM_OPTION_COUNT] = {
+		0, 0, 63, 63
+	};
+	uint8_t osc2_m_geom_slider_values[GEOM_OPTION_COUNT] = {
 		0, 0, 63, 63
 	};
 	midi_slider_values[0][0] = 127;
@@ -514,8 +593,13 @@ int lcd_test(void)
 	osc1_m_slider_values[6][0] = 63;
 	osc1_m_slider_values[7][0] = 63;
 	osc1_m_slider_values[8][0] = 63;
+	osc2_m_slider_values[9][0] = 127;
+	osc2_m_slider_values[15][0] = 63;
+	osc2_m_slider_values[16][0] = 63;
+	osc2_m_slider_values[17][0] = 63;
 	bool button_toggle_states[BUTTON_COUNT] = { false };
 	bool osc1_m_wave_toggle_states[2] = { false, false };
+	bool osc2_m_wave_toggle_states[2] = { false, false };
 	const POINT left_meter_x = 12;
 	const POINT meter_end_x = left_meter_x + VU_BAR_WIDTH + 44;
 	const POINT slider_width = 24;
@@ -556,32 +640,58 @@ int lcd_test(void)
 	bool osc1_m_audio_control_enabled[BUTTON_COUNT][2] = { { false } };
 	bool osc1_m_audio_control_inverted[BUTTON_COUNT][2] = { { false } };
 	uint8_t osc1_m_audio_scale_values[BUTTON_COUNT][2] = { { 0 } };
+	bool osc2_m_audio_control_enabled[BUTTON_COUNT][2] = { { false } };
+	bool osc2_m_audio_control_inverted[BUTTON_COUNT][2] = { { false } };
+	uint8_t osc2_m_audio_scale_values[BUTTON_COUNT][2] = { { 0 } };
 	bool startup_toggle_reset_sent = false;
 	uint8_t last_audio_cc_values[BUTTON_COUNT][2];
 	uint8_t osc1_m_last_audio_cc_values[BUTTON_COUNT][2];
+	uint8_t osc2_m_last_audio_cc_values[BUTTON_COUNT][2];
 	memset(last_audio_cc_values, UINT8_MAX, sizeof(last_audio_cc_values));
 	memset(osc1_m_last_audio_cc_values, UINT8_MAX,
 		sizeof(osc1_m_last_audio_cc_values));
+	memset(osc2_m_last_audio_cc_values, UINT8_MAX,
+		sizeof(osc2_m_last_audio_cc_values));
 	#define AUDIO_CONTROL_ENABLED(button, slider) \
-		(*(button_toggle_states[OSC1_M_BUTTON_INDEX] && \
+		(*(g_osc1_m_mode && \
+			is_osc1_button((uint8_t)(button)) && \
 			has_osc1_m_slider((uint8_t)(button)) \
 			? &osc1_m_audio_control_enabled[(button)][(slider)] \
-			: &audio_control_enabled[(button)][(slider)]))
+			: g_osc2_m_mode && \
+				is_osc2_button((uint8_t)(button)) && \
+				has_osc2_m_slider((uint8_t)(button)) \
+				? &osc2_m_audio_control_enabled[(button)][(slider)] \
+				: &audio_control_enabled[(button)][(slider)]))
 	#define AUDIO_CONTROL_INVERTED(button, slider) \
-		(*(button_toggle_states[OSC1_M_BUTTON_INDEX] && \
+		(*(g_osc1_m_mode && \
+			is_osc1_button((uint8_t)(button)) && \
 			has_osc1_m_slider((uint8_t)(button)) \
 			? &osc1_m_audio_control_inverted[(button)][(slider)] \
-			: &audio_control_inverted[(button)][(slider)]))
+			: g_osc2_m_mode && \
+				is_osc2_button((uint8_t)(button)) && \
+				has_osc2_m_slider((uint8_t)(button)) \
+				? &osc2_m_audio_control_inverted[(button)][(slider)] \
+				: &audio_control_inverted[(button)][(slider)]))
 	#define AUDIO_SCALE_VALUE(button, slider) \
-		(*(button_toggle_states[OSC1_M_BUTTON_INDEX] && \
+		(*(g_osc1_m_mode && \
+			is_osc1_button((uint8_t)(button)) && \
 			has_osc1_m_slider((uint8_t)(button)) \
 			? &osc1_m_audio_scale_values[(button)][(slider)] \
-			: &audio_scale_values[(button)][(slider)]))
+			: g_osc2_m_mode && \
+				is_osc2_button((uint8_t)(button)) && \
+				has_osc2_m_slider((uint8_t)(button)) \
+				? &osc2_m_audio_scale_values[(button)][(slider)] \
+				: &audio_scale_values[(button)][(slider)]))
 	#define LAST_AUDIO_CC_VALUE(button, slider) \
-		(*(button_toggle_states[OSC1_M_BUTTON_INDEX] && \
+		(*(g_osc1_m_mode && \
+			is_osc1_button((uint8_t)(button)) && \
 			has_osc1_m_slider((uint8_t)(button)) \
 			? &osc1_m_last_audio_cc_values[(button)][(slider)] \
-			: &last_audio_cc_values[(button)][(slider)]))
+			: g_osc2_m_mode && \
+				is_osc2_button((uint8_t)(button)) && \
+				has_osc2_m_slider((uint8_t)(button)) \
+				? &osc2_m_last_audio_cc_values[(button)][(slider)] \
+				: &last_audio_cc_values[(button)][(slider)]))
 	int8_t displayed_audio_button = -1;
 	bool displayed_audio_enabled[2] = { false, false };
 	bool displayed_audio_scale_visible[2] = { false, false };
@@ -621,9 +731,11 @@ int lcd_test(void)
 	uint8_t slider_drag_index = 0;
 	while(1) {
 		uint16_t adc_reading = adc_read();
+		g_osc1_m_mode = button_toggle_states[OSC1_M_BUTTON_INDEX];
+		g_osc2_m_mode = button_toggle_states[OSC2_M_BUTTON_INDEX];
 		uint8_t selected_audio_bank = selected_button >= 0
 			? get_audio_state_bank((uint8_t)selected_button,
-				button_toggle_states[OSC1_M_BUTTON_INDEX])
+				g_osc1_m_mode)
 			: 0;
 		if (!startup_toggle_reset_sent && tud_mounted()) {
 			for (uint8_t i = 0; i < BUTTON_COUNT; i++) {
@@ -703,6 +815,8 @@ int lcd_test(void)
 					memset(midi_slider_values, 0, sizeof(midi_slider_values));
 					memset(osc1_m_slider_values, 0,
 						sizeof(osc1_m_slider_values));
+					memset(osc2_m_slider_values, 0,
+						sizeof(osc2_m_slider_values));
 					geom_slider_values[0] = 0;
 					geom_slider_values[1] = 0;
 					geom_slider_values[2] = 63;
@@ -711,6 +825,10 @@ int lcd_test(void)
 					osc1_m_geom_slider_values[1] = 0;
 					osc1_m_geom_slider_values[2] = 63;
 					osc1_m_geom_slider_values[3] = 63;
+					osc2_m_geom_slider_values[0] = 0;
+					osc2_m_geom_slider_values[1] = 0;
+					osc2_m_geom_slider_values[2] = 63;
+					osc2_m_geom_slider_values[3] = 63;
 					midi_slider_values[0][0] = 127;
 					midi_slider_values[9][0] = 127;
 					midi_slider_values[6][0] = 63;
@@ -723,12 +841,22 @@ int lcd_test(void)
 					osc1_m_slider_values[6][0] = 63;
 					osc1_m_slider_values[7][0] = 63;
 					osc1_m_slider_values[8][0] = 63;
+					osc2_m_slider_values[9][0] = 127;
+					osc2_m_slider_values[15][0] = 63;
+					osc2_m_slider_values[16][0] = 63;
+					osc2_m_slider_values[17][0] = 63;
 					memset(button_toggle_states, 0,
 						sizeof(button_toggle_states));
+					g_osc1_m_mode = false;
+					g_osc2_m_mode = false;
 					memset(osc1_m_wave_toggle_states, 0,
 						sizeof(osc1_m_wave_toggle_states));
+					memset(osc2_m_wave_toggle_states, 0,
+						sizeof(osc2_m_wave_toggle_states));
 					osc1_m_wave_toggle_states[0] = false;
 					osc1_m_wave_toggle_states[1] = false;
+					osc2_m_wave_toggle_states[0] = false;
+					osc2_m_wave_toggle_states[1] = false;
 					memset(audio_control_enabled, 0,
 						sizeof(audio_control_enabled));
 					memset(audio_control_inverted, 0,
@@ -741,10 +869,18 @@ int lcd_test(void)
 						sizeof(osc1_m_audio_control_inverted));
 					memset(osc1_m_audio_scale_values, 0,
 						sizeof(osc1_m_audio_scale_values));
+					memset(osc2_m_audio_control_enabled, 0,
+						sizeof(osc2_m_audio_control_enabled));
+					memset(osc2_m_audio_control_inverted, 0,
+						sizeof(osc2_m_audio_control_inverted));
+					memset(osc2_m_audio_scale_values, 0,
+						sizeof(osc2_m_audio_scale_values));
 					memset(last_audio_cc_values, UINT8_MAX,
 						sizeof(last_audio_cc_values));
 					memset(osc1_m_last_audio_cc_values, UINT8_MAX,
 						sizeof(osc1_m_last_audio_cc_values));
+					memset(osc2_m_last_audio_cc_values, UINT8_MAX,
+						sizeof(osc2_m_last_audio_cc_values));
 					selected_button = -1;
 					selected_four_button = -1;
 					geom_options_enabled = false;
@@ -839,8 +975,11 @@ int lcd_test(void)
 								selected_geom_option, midi_slider_values,
 								geom_slider_values,
 								button_toggle_states[OSC1_M_BUTTON_INDEX],
-								osc1_m_slider_values,
-								osc1_m_geom_slider_values);
+											osc1_m_slider_values,
+											osc1_m_geom_slider_values,
+											button_toggle_states[OSC2_M_BUTTON_INDEX],
+											osc2_m_slider_values,
+											osc2_m_geom_slider_values);
 							if (AUDIO_CONTROL_ENABLED(
 									GEOM_BUTTON_INDEX, 0)) {
 								value = apply_adc_offset(value, adc_reading,
@@ -909,37 +1048,41 @@ int lcd_test(void)
 										OSC1_M_BUTTON_INDEX]) {
 									send_control_change(
 										OSC1_M_CC_NUMBER, 0);
+								} else if (is_osc2_wave_button(
+										(uint8_t)button_index) &&
+									!button_toggle_states[
+										OSC2_M_BUTTON_INDEX]) {
+									send_control_change(
+										OSC2_M_CC_NUMBER, 0);
 								}
 								bool *toggle_state =
-									is_osc1_wave_button(
-										(uint8_t)button_index) &&
-									button_toggle_states[
-										OSC1_M_BUTTON_INDEX]
+									is_osc1_wave_button((uint8_t)button_index) &&
+									button_toggle_states[OSC1_M_BUTTON_INDEX]
 									? &osc1_m_wave_toggle_states[
-										button_index -
-											OSC1_WAVE_BUTTON_START]
-									: &button_toggle_states[button_index];
+										button_index - OSC1_WAVE_BUTTON_START]
+									: is_osc2_wave_button((uint8_t)button_index) &&
+										button_toggle_states[OSC2_M_BUTTON_INDEX]
+										? &osc2_m_wave_toggle_states[
+											button_index - OSC2_WAVE_BUTTON_START]
+										: &button_toggle_states[button_index];
 								bool is_square_or_saw =
-									(button_index >= OSC1_WAVE_BUTTON_START &&
-									 button_index < OSC1_WAVE_BUTTON_START + 2) ||
-									(button_index >= OSC2_WAVE_BUTTON_START &&
-									 button_index < OSC2_WAVE_BUTTON_START + 2);
-								if (is_square_or_saw &&
-									!*toggle_state) {
+									is_osc1_wave_button((uint8_t)button_index) ||
+									is_osc2_wave_button((uint8_t)button_index);
+								if (is_square_or_saw && !*toggle_state) {
 									uint8_t other_button_index =
 										button_index % BUTTON_COLUMNS == 0
 										? button_index + 1
 										: button_index - 1;
 									bool *other_toggle_state =
-										is_osc1_wave_button(
-											other_button_index) &&
-										button_toggle_states[
-											OSC1_M_BUTTON_INDEX]
+										is_osc1_wave_button(other_button_index) &&
+										button_toggle_states[OSC1_M_BUTTON_INDEX]
 										? &osc1_m_wave_toggle_states[
-											other_button_index -
-												OSC1_WAVE_BUTTON_START]
-										: &button_toggle_states[
-											other_button_index];
+											other_button_index - OSC1_WAVE_BUTTON_START]
+										: is_osc2_wave_button(other_button_index) &&
+											button_toggle_states[OSC2_M_BUTTON_INDEX]
+											? &osc2_m_wave_toggle_states[
+												other_button_index - OSC2_WAVE_BUTTON_START]
+											: &button_toggle_states[other_button_index];
 									if (*other_toggle_state) {
 										*other_toggle_state = false;
 										send_control_change(
@@ -954,21 +1097,40 @@ int lcd_test(void)
 									}
 								}
 								*toggle_state = !*toggle_state;
+								if (button_index ==
+									OSC1_M_BUTTON_INDEX) {
+									g_osc1_m_mode =
+										button_toggle_states[
+											OSC1_M_BUTTON_INDEX];
+								} else if (button_index ==
+									OSC2_M_BUTTON_INDEX) {
+									g_osc2_m_mode =
+										button_toggle_states[
+											OSC2_M_BUTTON_INDEX];
+								}
 								send_control_change(
 									button_toggle_cc_numbers[button_index],
 									*toggle_state ? 127 : 0);
-								if (button_index == OSC1_M_BUTTON_INDEX) {
+								if (button_index == OSC1_M_BUTTON_INDEX ||
+									button_index == OSC2_M_BUTTON_INDEX) {
+									uint8_t wave_start =
+										button_index == OSC1_M_BUTTON_INDEX
+										? OSC1_WAVE_BUTTON_START
+										: OSC2_WAVE_BUTTON_START;
+									bool toggle_mode_active =
+										button_index == OSC1_M_BUTTON_INDEX
+										? button_toggle_states[OSC1_M_BUTTON_INDEX]
+										: button_toggle_states[OSC2_M_BUTTON_INDEX];
+									bool *wave_toggle_states =
+										button_index == OSC1_M_BUTTON_INDEX
+										? osc1_m_wave_toggle_states
+										: osc2_m_wave_toggle_states;
 									for (uint8_t i = 0; i < 2; i++) {
-										uint8_t wave_button_index =
-											OSC1_WAVE_BUTTON_START + i;
+										uint8_t wave_button_index = wave_start + i;
 										bool wave_selected =
-											button_toggle_states[
-												OSC1_M_BUTTON_INDEX]
-											? osc1_m_wave_toggle_states[i]
-											: button_toggle_states[
-												wave_button_index];
-										if (!button_toggle_states[
-												OSC1_M_BUTTON_INDEX]) {
+											toggle_mode_active ? wave_toggle_states[i]
+											: button_toggle_states[wave_button_index];
+										if (!toggle_mode_active) {
 											send_control_change(
 												button_toggle_cc_numbers[
 													wave_button_index],
@@ -983,9 +1145,13 @@ int lcd_test(void)
 											wave_selected, true, false);
 									}
 									for (uint8_t i = 0;
-										 i < OSC1_CONTROL_COUNT; i++) {
+										i < OSC1_CONTROL_COUNT +
+											OSC1_CONTROL_COUNT; i++) {
 										if (has_audio_control(i) &&
-											has_osc1_m_slider(i)) {
+											((button_index == OSC1_M_BUTTON_INDEX &&
+											  has_osc1_m_slider(i)) ||
+											 (button_index == OSC2_M_BUTTON_INDEX &&
+											  has_osc2_m_slider(i)))) {
 											draw_grid_button(grid_x, grid_y,
 												button_width,
 												final_row_button_width,
@@ -997,19 +1163,24 @@ int lcd_test(void)
 										}
 									}
 								}
-								if (button_index == OSC1_M_BUTTON_INDEX &&
+								if ((button_index == OSC1_M_BUTTON_INDEX ||
+									button_index == OSC2_M_BUTTON_INDEX) &&
 									selected_button >= 0 &&
-									has_osc1_m_slider(
-										(uint8_t)selected_button)) {
+									((button_index == OSC1_M_BUTTON_INDEX &&
+									  has_osc1_m_slider((uint8_t)selected_button)) ||
+									 (button_index == OSC2_M_BUTTON_INDEX &&
+									  has_osc2_m_slider((uint8_t)selected_button)))) {
 									uint8_t value = get_slider_value(
 										(uint8_t)selected_button, 0,
 										selected_geom_option,
 										midi_slider_values,
 										geom_slider_values,
-										button_toggle_states[
-											OSC1_M_BUTTON_INDEX],
-										osc1_m_slider_values,
-										osc1_m_geom_slider_values);
+										button_toggle_states[OSC1_M_BUTTON_INDEX],
+											osc1_m_slider_values,
+											osc1_m_geom_slider_values,
+											button_toggle_states[OSC2_M_BUTTON_INDEX],
+											osc2_m_slider_values,
+										osc2_m_geom_slider_values);
 									if (AUDIO_CONTROL_ENABLED(
 											selected_button, 0)) {
 										value = apply_adc_offset(value,
@@ -1090,10 +1261,12 @@ int lcd_test(void)
 										selected_geom_option,
 										midi_slider_values,
 										geom_slider_values,
-										button_toggle_states[
-											OSC1_M_BUTTON_INDEX],
-										osc1_m_slider_values,
-										osc1_m_geom_slider_values);
+										button_toggle_states[OSC1_M_BUTTON_INDEX],
+											osc1_m_slider_values,
+											osc1_m_geom_slider_values,
+											button_toggle_states[OSC2_M_BUTTON_INDEX],
+											osc2_m_slider_values,
+											osc2_m_geom_slider_values);
 									if (AUDIO_CONTROL_ENABLED(
 											GEOM_BUTTON_INDEX, 0)) {
 										value = apply_adc_offset(value,
@@ -1195,8 +1368,11 @@ int lcd_test(void)
 							selected_geom_option, midi_slider_values,
 							geom_slider_values,
 							button_toggle_states[OSC1_M_BUTTON_INDEX],
-							osc1_m_slider_values,
-							osc1_m_geom_slider_values),
+											osc1_m_slider_values,
+											osc1_m_geom_slider_values,
+											button_toggle_states[OSC2_M_BUTTON_INDEX],
+											osc2_m_slider_values,
+											osc2_m_geom_slider_values),
 						adc_reading,
 						AUDIO_SCALE_VALUE(selected_button, slider_index),
 						AUDIO_CONTROL_INVERTED(
@@ -1268,10 +1444,12 @@ int lcd_test(void)
 								(uint8_t)selected_button, slider_index,
 								selected_geom_option, midi_slider_values,
 								geom_slider_values,
-								button_toggle_states[
-									OSC1_M_BUTTON_INDEX],
-								osc1_m_slider_values,
-								osc1_m_geom_slider_values),
+								button_toggle_states[OSC1_M_BUTTON_INDEX],
+											osc1_m_slider_values,
+											osc1_m_geom_slider_values,
+											button_toggle_states[OSC2_M_BUTTON_INDEX],
+											osc2_m_slider_values,
+											osc2_m_geom_slider_values),
 							adc_reading,
 							AUDIO_SCALE_VALUE(
 								selected_button, slider_index),
@@ -1319,16 +1497,22 @@ int lcd_test(void)
 						selected_geom_option, midi_slider_values,
 						geom_slider_values,
 						button_toggle_states[OSC1_M_BUTTON_INDEX],
-						osc1_m_slider_values,
-						osc1_m_geom_slider_values);
+											osc1_m_slider_values,
+											osc1_m_geom_slider_values,
+											button_toggle_states[OSC2_M_BUTTON_INDEX],
+											osc2_m_slider_values,
+											osc2_m_geom_slider_values);
 					uint8_t slider_value = (uint8_t)(127u -
 						((relative * 127u) / adjusted_range));
 					set_slider_value((uint8_t)selected_button, slider_index,
 						selected_geom_option, slider_value,
 						midi_slider_values, geom_slider_values,
 						button_toggle_states[OSC1_M_BUTTON_INDEX],
-						osc1_m_slider_values,
-						osc1_m_geom_slider_values);
+											osc1_m_slider_values,
+											osc1_m_geom_slider_values,
+											button_toggle_states[OSC2_M_BUTTON_INDEX],
+											osc2_m_slider_values,
+											osc2_m_geom_slider_values);
 					bool slider_value_changed =
 						slider_value != previous_slider_value;
 					if (slider_value_changed) {
@@ -1389,10 +1573,12 @@ int lcd_test(void)
 								(uint8_t)selected_button, slider_index,
 								selected_geom_option, midi_slider_values,
 								geom_slider_values,
-								button_toggle_states[
-									OSC1_M_BUTTON_INDEX],
-								osc1_m_slider_values,
-								osc1_m_geom_slider_values),
+								button_toggle_states[OSC1_M_BUTTON_INDEX],
+											osc1_m_slider_values,
+											osc1_m_geom_slider_values,
+											button_toggle_states[OSC2_M_BUTTON_INDEX],
+											osc2_m_slider_values,
+											osc2_m_geom_slider_values),
 							adc_reading,
 							AUDIO_SCALE_VALUE(
 								selected_button, slider_index),
@@ -1403,8 +1589,11 @@ int lcd_test(void)
 							selected_geom_option, midi_slider_values,
 							geom_slider_values,
 							button_toggle_states[OSC1_M_BUTTON_INDEX],
-							osc1_m_slider_values,
-							osc1_m_geom_slider_values);
+											osc1_m_slider_values,
+											osc1_m_geom_slider_values,
+											button_toggle_states[OSC2_M_BUTTON_INDEX],
+											osc2_m_slider_values,
+											osc2_m_geom_slider_values);
 					send_control_change(
 						get_slider_cc_number(
 							(uint8_t)selected_button, slider_index,
@@ -1459,8 +1648,11 @@ int lcd_test(void)
 						selected_geom_option, midi_slider_values,
 						geom_slider_values,
 						button_toggle_states[OSC1_M_BUTTON_INDEX],
-						osc1_m_slider_values,
-						osc1_m_geom_slider_values)
+											osc1_m_slider_values,
+											osc1_m_geom_slider_values,
+											button_toggle_states[OSC2_M_BUTTON_INDEX],
+											osc2_m_slider_values,
+											osc2_m_geom_slider_values)
 					: 0,
 				selected_button >= 0);
 		if (selected_button >= 0 &&
@@ -1657,10 +1849,12 @@ int lcd_test(void)
 							get_slider_value(i, slider_index,
 								selected_geom_option, midi_slider_values,
 								geom_slider_values,
-								button_toggle_states[
-									OSC1_M_BUTTON_INDEX],
-								osc1_m_slider_values,
-								osc1_m_geom_slider_values),
+								button_toggle_states[OSC1_M_BUTTON_INDEX],
+											osc1_m_slider_values,
+											osc1_m_geom_slider_values,
+											button_toggle_states[OSC2_M_BUTTON_INDEX],
+											osc2_m_slider_values,
+											osc2_m_geom_slider_values),
 							adc_reading,
 							AUDIO_SCALE_VALUE(i, slider_index),
 							AUDIO_CONTROL_INVERTED(i, slider_index));

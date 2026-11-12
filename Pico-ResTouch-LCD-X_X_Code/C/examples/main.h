@@ -33,6 +33,6 @@
 #include "DEV_Config.h"
 #include <pico/stdlib.h> // malloc() free()
 
-int lcd_test(void);
+int artificial_life_midi(void);
 
 #endif

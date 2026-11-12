@@ -3,7 +3,7 @@
 int main(void)
 {
     while(1) {
-        lcd_test();
+        artificial_life_midi();
     }
     return 0;
 }

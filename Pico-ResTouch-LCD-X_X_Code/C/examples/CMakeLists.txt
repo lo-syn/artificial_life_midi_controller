@@ -1,6 +1,4 @@
-# Search for all source files in the current directory
-# and save the names to the DIR_examples_SRCS variable
-aux_source_directory(. DIR_EXAMPLES_SRCS)
+set(DIR_EXAMPLES_SRCS artificial_life_midi.c)
 
 # Add header file directory
 include_directories(../lib/config)
