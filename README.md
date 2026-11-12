@@ -23,8 +23,6 @@ The second slider controls the scaling of the ADC input:
 
 ### Colour Buttons
 
-![Colour Buttons](images/colour-buttons.png)
-
 These buttons generate two sliders:
 
 - **Left slider:** Controls OSC1.
