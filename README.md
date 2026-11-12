@@ -8,7 +8,7 @@ Provides MIDI control over all functions and parameters of Artificial Life.
 
 ### OSC1 / OSC2 Buttons
 
-![OSC1/OSC2 Buttons](images/osc-buttons.png)
+![OSC1/OSC2 Buttons](display.png)
 
 Each button creates a slider that sends MIDI values (0–127) on the selected CC channel, with parameter mapping as specified in the Artificial Life manual.
 
