@@ -23,7 +23,7 @@
             "command": "${env:HOME}/.pico-sdk/picotool/2.3.1/picotool/picotool",
             "args": [
                 "load",
-                "${workspaceFolder}/build/main.elf",
+                "${workspaceFolder}/build/artificial_life_midi_controller.elf",
                 "-fx"
             ],
             "presentation": {

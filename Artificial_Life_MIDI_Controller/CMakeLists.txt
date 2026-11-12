@@ -40,6 +40,9 @@ add_executable(main
 main.c
 usb_descriptors.c
 )
+set_target_properties(main PROPERTIES
+    OUTPUT_NAME "artificial_life_midi_controller"
+)
 
 # enable usb output, disable uart output
 pico_enable_stdio_usb(main 1)
