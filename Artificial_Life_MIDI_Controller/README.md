@@ -12,8 +12,7 @@ computer used to flash it.
    The project is configured for the Raspberry Pi Pico (`PICO_BOARD=pico`).
 4. Find the firmware at `build/main.uf2`.
 
-The extension installs/configures the Pico SDK and ARM toolchain. A separate
-copy of the SDK does not need to be added to this repository.
+The extension installs/configures the Pico SDK and ARM toolchain.
 
 ## Flash the Pico
 
@@ -22,11 +21,3 @@ copy of the SDK does not need to be added to this repository.
    the `RPI-RP2` drive.
 3. Copy `build/main.uf2` to that drive. The Pico reboots and starts the
    firmware.
-
-To share a ready-to-flash build, attach `main.uf2` from the `build` directory
-to a GitHub Release. The `build` directory is ignored by Git, so generated
-build files are not included in source commits.
-
-The VS Code **Run Project** task uses picotool to load and execute the ELF over
-USB; use the UF2/BOOTSEL steps above for a straightforward flash that persists
-after power is disconnected.
