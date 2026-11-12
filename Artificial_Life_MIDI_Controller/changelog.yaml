@@ -1,0 +1,17 @@
+---
+unreleased:
+  date: "YYYY-MM-DD"
+  utils:
+    added:
+    changed:
+    deprecated:
+    fixed:
+    removed:
+
+1.0.0:
+  date: "2026-11-12"
+  tasks:
+    added:
+      - >
+        First release of midi controller
+        
